@@ -12,16 +12,11 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// HTTP Client for API calls
-// Use the host's base address to determine the API URL
-var baseAddress = builder.HostEnvironment.BaseAddress;
-var apiUrl = baseAddress.Contains("localhost") 
-    ? "http://localhost:5041" 
-    : "http://192.168.0.186:5041"; // Your PC's IP address
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://stockit-api-jacques.azurewebsites.net";
 
 builder.Services.AddScoped(sp => new HttpClient 
 { 
-    BaseAddress = new Uri(apiUrl)
+    BaseAddress = new Uri(apiBaseUrl) 
 });
 
 // Services with optimized lifetimes
