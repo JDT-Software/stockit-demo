@@ -1,44 +1,46 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
-using Stockit;
-using Stockit.Services;  
-using MudBlazor.Services;
-using Fluxor;
+using Microsoft.AspNetCore.Components.Authorization;
 using Blazored.LocalStorage;
-using Fluxor.Blazor.Web.ReduxDevTools;
-using ApexCharts;
+using MudBlazor.Services;
+using Stockit;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://stockit-api-jacques.azurewebsites.net";
-
-builder.Services.AddScoped(sp => new HttpClient 
-{ 
-    BaseAddress = new Uri(apiBaseUrl) 
-});
-
-// Services with optimized lifetimes
-builder.Services.AddScoped<IProductService, ProductService>();
-builder.Services.AddScoped<ISupplierService, SupplierService>();
-builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IAuthorizationService, AuthorizationService>();
-builder.Services.AddApexCharts();
-
-// State Management (Fluxor)
-builder.Services.AddFluxor(options =>
-{
-    options.ScanAssemblies(typeof(Program).Assembly);
-    options.UseReduxDevTools(); // Browser DevTools integration
-    options.UseRouting();
-});
-
-// Local Storage
+// Add LocalStorage
 builder.Services.AddBlazoredLocalStorage();
 
-// MudBlazor UI Components
+// Add MudBlazor
 builder.Services.AddMudServices();
+
+// Configure HttpClient with JWT token
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://stockit-api-jacques.azurewebsites.net";
+
+builder.Services.AddScoped(sp =>
+{
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    var httpClient = new HttpClient { BaseAddress = new Uri(apiBaseUrl) };
+    
+    // Try to get token from localStorage
+    try
+    {
+        var token = localStorage.GetItemAsStringAsync("authToken").GetAwaiter().GetResult();
+        if (!string.IsNullOrEmpty(token))
+        {
+            // Remove quotes if present
+            token = token.Trim('"');
+            httpClient.DefaultRequestHeaders.Authorization = 
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+    }
+    catch
+    {
+        // No token yet, that's ok
+    }
+    
+    return httpClient;
+});
 
 await builder.Build().RunAsync();
