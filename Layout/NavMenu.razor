@@ -1,0 +1,146 @@
+﻿@using Stockit.Services
+@using Stockit.Models
+@inject IAuthService AuthService
+@inject IAuthorizationService AuthorizationService
+@inject NavigationManager NavigationManager
+
+<MudNavMenu Color="Color.Primary">
+    <!-- User Info Section -->
+    @if (currentUser != null)
+    {
+        <MudPaper Elevation="0" Class="pa-4 mb-4" Style="background-color: rgba(220, 47, 2, 0.15); border-left: 4px solid #DC2F02;">
+            <MudStack Row="false" Spacing="2">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudAvatar Color="Color.Primary" Size="Size.Large">
+                        @currentUser.FullName.Substring(0, 1).ToUpper()
+                    </MudAvatar>
+                    <MudStack Row="false" Spacing="0">
+                        <MudText Typo="Typo.body1" Style="color: #EAE2B7; font-weight: 600;">@currentUser.FullName</MudText>
+                        <MudText Typo="Typo.caption" Style="color: #F48C06;">@currentUser.Role</MudText>
+                    </MudStack>
+                </MudStack>
+                <MudButton Variant="Variant.Outlined" 
+                           Color="Color.Error" 
+                           Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Logout"
+                           OnClick="HandleLogout"
+                           FullWidth="true"
+                           Style="border-color: #DC2F02; color: #DC2F02;">
+                    Logout
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudDivider Class="mb-2" Style="background-color: rgba(55, 6, 23, 0.3);" />
+
+    <!-- Navigation Links with Icons -->
+    @if (canAccessDashboard)
+    {
+        <MudNavLink Href="/" 
+                    Match="NavLinkMatch.All" 
+                    Icon="@Icons.Material.Filled.Dashboard"
+                    IconColor="Color.Primary">
+            <MudText Style="color: #EAE2B7; font-weight: 500;">Dashboard</MudText>
+        </MudNavLink>
+    }
+    
+    @if (canAccessStockEntry)
+    {
+        <MudNavLink Href="/stock-entry" 
+                    Icon="@Icons.Material.Filled.Inventory"
+                    IconColor="Color.Primary">
+            <MudText Style="color: #EAE2B7; font-weight: 500;">Stock Entry</MudText>
+        </MudNavLink>
+    }
+    
+    @if (canAccessProducts)
+    {
+        <MudNavLink Href="/products" 
+                    Icon="@Icons.Material.Filled.Category"
+                    IconColor="Color.Primary">
+            <MudText Style="color: #EAE2B7; font-weight: 500;">Products</MudText>
+        </MudNavLink>
+    }
+    
+    @if (canAccessPurchaseOrders)
+    {
+        <MudNavLink Href="/purchase-orders" 
+                    Icon="@Icons.Material.Filled.ShoppingCart"
+                    IconColor="Color.Primary">
+            <MudText Style="color: #EAE2B7; font-weight: 500;">Purchase Orders</MudText>
+        </MudNavLink>
+    }
+    
+    @if (canAccessSuppliers)
+    {
+        <MudNavLink Href="/suppliers" 
+                    Icon="@Icons.Material.Filled.LocalShipping"
+                    IconColor="Color.Primary">
+            <MudText Style="color: #EAE2B7; font-weight: 500;">Suppliers</MudText>
+        </MudNavLink>
+    }
+    
+    @if (canAccessAuditTrail)
+    {
+        <MudNavLink Href="/audit-trail" 
+                    Icon="@Icons.Material.Filled.History"
+                    IconColor="Color.Primary">
+            <MudText Style="color: #EAE2B7; font-weight: 500;">Audit Trail</MudText>
+        </MudNavLink>
+    }
+</MudNavMenu>
+
+<style>
+    .mud-nav-link {
+        color: #EAE2B7 !important;
+        padding: 12px 16px !important;
+        margin: 4px 8px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .mud-nav-link:hover {
+        background-color: rgba(220, 47, 2, 0.15) !important;
+        border-left: 4px solid #DC2F02 !important;
+    }
+
+    .mud-nav-link.active {
+        background-color: rgba(220, 47, 2, 0.25) !important;
+        border-left: 4px solid #DC2F02 !important;
+    }
+
+    .mud-nav-link .mud-icon-root {
+        color: #DC2F02 !important;
+        font-size: 24px !important;
+    }
+</style>
+
+@code {
+    private User? currentUser;
+    
+    private bool canAccessDashboard = false;
+    private bool canAccessStockEntry = false;
+    private bool canAccessProducts = false;
+    private bool canAccessPurchaseOrders = false;
+    private bool canAccessSuppliers = false;
+    private bool canAccessAuditTrail = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUser = await AuthService.GetCurrentUserAsync();
+        
+        canAccessDashboard = await AuthorizationService.CanAccessDashboardAsync();
+        canAccessStockEntry = await AuthorizationService.CanAccessStockEntryAsync();
+        canAccessProducts = await AuthorizationService.CanAccessProductsAsync();
+        canAccessPurchaseOrders = await AuthorizationService.CanAccessPurchaseOrdersAsync();
+        canAccessSuppliers = await AuthorizationService.CanAccessSuppliersAsync();
+        canAccessAuditTrail = await AuthorizationService.CanAccessAuditTrailAsync();
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        NavigationManager.NavigateTo("/", forceLoad: true);
+    }
+}

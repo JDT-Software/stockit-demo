@@ -1,0 +1,119 @@
+@using MudBlazor
+@using Stockit.Models
+@inject ISupplierService SupplierService
+@inject ISnackbar Snackbar
+
+<MudDialog CloseButton="true">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-2" />
+            @(IsEdit ? "Edit Supplier" : "Add Supplier")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@isValid">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Supplier.SupplierName"
+                                  Label="Supplier Name"
+                                  Required="true"
+                                  RequiredError="Supplier name is required" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="Supplier.ContactPerson"
+                                  Label="Contact Person" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="Supplier.Email"
+                                  Label="Email"
+                                  InputType="InputType.Email" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="Supplier.Phone"
+                                  Label="Phone" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="Supplier.LeadTimeDays"
+                                     Label="Lead Time (Days)"
+                                     Min="0"
+                                     Required="true" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Supplier.Address"
+                                  Label="Address"
+                                  Lines="3" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" 
+                   Variant="Variant.Filled"
+                   OnClick="Submit"
+                   Disabled="@(!isValid || isSaving)">
+            @if (isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            }
+            else
+            {
+                <span>@(IsEdit ? "Update" : "Create")</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] 
+    MudBlazor.IDialogReference MudDialog { get; set; } = null!;
+    
+    [Parameter] 
+    public Supplier Supplier { get; set; } = new();
+    
+    [Parameter] 
+    public bool IsEdit { get; set; }
+
+    private MudForm form = null!;
+    private bool isValid;
+    private bool isSaving;
+
+    private async Task Submit()
+    {
+        await form.Validate();
+        
+        if (!isValid)
+            return;
+
+        isSaving = true;
+
+        bool success;
+        if (IsEdit)
+        {
+            success = await SupplierService.UpdateSupplierAsync(Supplier);
+            if (success)
+                Snackbar.Add($"Supplier '{Supplier.SupplierName}' updated successfully!", Severity.Success);
+        }
+        else
+        {
+            success = await SupplierService.CreateSupplierAsync(Supplier);
+            if (success)
+                Snackbar.Add($"Supplier '{Supplier.SupplierName}' created successfully!", Severity.Success);
+        }
+
+        isSaving = false;
+
+        if (success)
+        {
+            MudDialog?.Close(DialogResult.Ok(Supplier)); // Pass the supplier back
+        }
+        else
+        {
+            Snackbar.Add("Failed to save supplier", Severity.Error);
+        }
+    }
+}

@@ -1,0 +1,335 @@
+@page "/audit-trail"
+@using Stockit.Models
+@inject IProductService ProductService
+@inject IAuthorizationService AuthorizationService
+@inject HttpClient Http
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<AuthorizeView RequirePermission="@(() => AuthorizationService.CanAccessAuditTrailAsync())">
+    <PageTitle>Audit Trail - Stockit</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.History" Class="mr-2" />
+        Stock Movement Audit Trail
+    </MudText>
+
+    @if (isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <MudText>Loading audit trail...</MudText>
+    }
+    else
+    {
+
+        <!-- Filters -->
+        <MudPaper Class="pa-4 mb-4">
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="4">
+                    <MudTextField @bind-Value="searchText" 
+                                  Label="Search Product" 
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="4">
+                    <MudSelect @bind-Value="selectedType" 
+                               Label="Movement Type" 
+                               Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("All")">All Types</MudSelectItem>
+                        <MudSelectItem Value="@("Purchase")">Purchase</MudSelectItem>
+                        <MudSelectItem Value="@("Adjustment")">Adjustment</MudSelectItem>
+                        <MudSelectItem Value="@("Return")">Return</MudSelectItem>
+                        <MudSelectItem Value="@("Damaged")">Damaged</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="4">
+                    <MudButton Variant="Variant.Filled" 
+                               Color="Color.Primary" 
+                               StartIcon="@Icons.Material.Filled.FilterAlt"
+                               OnClick="ApplyFilters"
+                               FullWidth="true">
+                        Apply Filters
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <!-- Summary Stats -->
+        <MudGrid Class="mb-4">
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Style="background: linear-gradient(135deg, #DC2F02 0%, #E85D04 100%);">
+                    <MudText Typo="Typo.h6" Style="color: #EAE2B7;">Total Movements</MudText>
+                    <MudText Typo="Typo.h4" Style="color: #FFFFFF;"><strong>@FilteredMovements().Count</strong></MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 100%);">
+                    <MudText Typo="Typo.h6" Style="color: #EAE2B7;">Purchases</MudText>
+                    <MudText Typo="Typo.h4" Style="color: #FFFFFF;"><strong>@GetCountByType("Purchase")</strong></MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Style="background: linear-gradient(135deg, #F48C06 0%, #FAA307 100%);">
+                    <MudText Typo="Typo.h6" Style="color: #03071E;">Adjustments</MudText>
+                    <MudText Typo="Typo.h4" Style="color: #03071E;"><strong>@GetCountByType("Adjustment")</strong></MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Style="background: linear-gradient(135deg, #6A040F 0%, #9D0208 100%);">
+                    <MudText Typo="Typo.h6" Style="color: #EAE2B7;">Returns/Damaged</MudText>
+                    <MudText Typo="Typo.h4" Style="color: #FFFFFF;"><strong>@(GetCountByType("Return") + GetCountByType("Damaged"))</strong></MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Movements Table -->
+        <MudPaper Elevation="2">
+            <MudTable Items="@GetPagedMovements()" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true">
+                <HeaderContent>
+                    <MudTh>Date/Time</MudTh>
+                    <MudTh>Type</MudTh>
+                    <MudTh>Product</MudTh>
+                    <MudTh>Quantity</MudTh>
+                    <MudTh>Previous</MudTh>
+                    <MudTh>New</MudTh>
+                    <MudTh>Reference</MudTh>
+                    <MudTh>User</MudTh>
+                    <MudTh>Notes</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Date/Time">
+                        <MudText Typo="Typo.body2">@context.CreatedDate.ToString("MMM dd, yyyy")</MudText>
+                        <MudText Typo="Typo.caption">@context.CreatedDate.ToString("HH:mm:ss")</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Type">
+                        <MudChip T="string" Size="Size.Small" Color="@GetMovementTypeColor(context.MovementType)">
+                            @context.MovementType
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Product">
+                        <MudText Typo="Typo.body2"><strong>@context.Product?.ProductCode</strong></MudText>
+                        <MudText Typo="Typo.caption">@context.Product?.ProductName</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Quantity">
+                        <MudText Typo="Typo.body1" Color="@(context.Quantity > 0 ? Color.Success : Color.Error)">
+                            @(context.Quantity > 0 ? "+" : "")@context.Quantity
+                        </MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Previous">@context.PreviousQuantity</MudTd>
+                    <MudTd DataLabel="New">@context.NewQuantity</MudTd>
+                    <MudTd DataLabel="Reference">
+                        @if (!string.IsNullOrEmpty(context.ReferenceType))
+                        {
+                            <MudText Typo="Typo.body2">@context.ReferenceType</MudText>
+                            <MudText Typo="Typo.caption">ID: @context.ReferenceID</MudText>
+                        }
+                        else
+                        {
+                            <text>-</text>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="User">User @context.CreatedBy</MudTd>
+                    <MudTd DataLabel="Notes/Details">
+                        @if (!string.IsNullOrEmpty(context.Notes))
+                        {
+                            <MudText Typo="Typo.body2">@context.Notes</MudText>
+                        }
+                        
+                        @if (context.ReferenceType == "PurchaseOrder" && context.ReferenceID.HasValue)
+                        {
+                            <MudButton Variant="Variant.Text" 
+                                       Color="Color.Primary" 
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.AttachFile"
+                                       OnClick="@(() => ViewPODocuments(context.ReferenceID.Value))">
+                                View Documents
+                            </MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+
+            <!-- Pagination Controls -->
+            <MudPaper Class="pa-4" Elevation="0">
+                <MudGrid Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudItem xs="12" sm="4">
+                        <MudSelect @bind-Value="pageSize" 
+                                   Label="Items per page" 
+                                   Variant="Variant.Outlined" 
+                                   Dense="true"
+                                   T="int"
+                                   Style="max-width: 150px;">
+                            <MudSelectItem Value="10">10</MudSelectItem>
+                            <MudSelectItem Value="25">25</MudSelectItem>
+                            <MudSelectItem Value="50">50</MudSelectItem>
+                            <MudSelectItem Value="100">100</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="4" Class="d-flex justify-center">
+                        <MudText Typo="Typo.body2">
+                            Showing @GetStartItem() - @GetEndItem() of @FilteredMovements().Count items
+                        </MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="4" Class="d-flex justify-end">
+                        <MudPagination Count="@GetTotalPages()" 
+                                       Selected="@currentPage" 
+                                       SelectedChanged="OnPageChanged"
+                                       Color="Color.Primary"
+                                       Size="Size.Medium"
+                                       ShowFirstButton="true"
+                                       ShowLastButton="true" />
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </MudPaper>
+    }
+</MudContainer>
+</AuthorizeView>
+
+@code {
+    private List<StockMovement> movements = new();
+    private bool isLoading = true;
+    private string searchText = "";
+    private string selectedType = "All";
+    
+    // Pagination variables
+    private int currentPage = 1;
+    private int pageSize = 25;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMovements();
+    }
+
+    private async Task LoadMovements()
+    {
+        isLoading = true;
+        movements = await ProductService.GetAllStockMovementsAsync();
+        isLoading = false;
+    }
+
+    private List<StockMovement> FilteredMovements()
+    {
+        var filtered = movements.AsEnumerable();
+
+        // Filter by search text
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            filtered = filtered.Where(m => 
+                m.Product?.ProductName?.Contains(searchText, StringComparison.OrdinalIgnoreCase) == true ||
+                m.Product?.ProductCode?.Contains(searchText, StringComparison.OrdinalIgnoreCase) == true);
+        }
+
+        // Filter by type
+        if (selectedType != "All")
+        {
+            filtered = filtered.Where(m => m.MovementType == selectedType);
+        }
+
+        return filtered.ToList();
+    }
+
+    private List<StockMovement> GetPagedMovements()
+    {
+        var filtered = FilteredMovements();
+        return filtered
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+    }
+
+    private int GetTotalPages()
+    {
+        var totalItems = FilteredMovements().Count;
+        return (int)Math.Ceiling(totalItems / (double)pageSize);
+    }
+
+    private int GetStartItem()
+    {
+        var filtered = FilteredMovements();
+        if (filtered.Count == 0) return 0;
+        return ((currentPage - 1) * pageSize) + 1;
+    }
+
+    private int GetEndItem()
+    {
+        var filtered = FilteredMovements();
+        var endItem = currentPage * pageSize;
+        return Math.Min(endItem, filtered.Count);
+    }
+
+    private void OnPageChanged(int page)
+    {
+        currentPage = page;
+        StateHasChanged();
+    }
+
+    private void ApplyFilters()
+    {
+        // Reset to first page when filters change
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private int GetCountByType(string type)
+    {
+        return movements.Count(m => m.MovementType == type);
+    }
+
+    private MudBlazor.Color GetMovementTypeColor(string type)
+    {
+        return type switch
+        {
+            "Purchase" => MudBlazor.Color.Success,
+            "Adjustment" => MudBlazor.Color.Info,
+            "Return" => MudBlazor.Color.Warning,
+            "Damaged" => MudBlazor.Color.Error,
+            _ => MudBlazor.Color.Default
+        };
+    }
+
+
+    private async Task ViewPODocuments(int referenceId)
+    {
+        try
+        {
+            // Get PO details
+            var response = await Http.GetAsync($"http://localhost:5041/api/purchaseorders/{referenceId}");
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Purchase order not found", Severity.Error);
+                return;
+            }
+
+            var po = await response.Content.ReadFromJsonAsync<PurchaseOrder>();
+            
+            if (po == null)
+            {
+                Snackbar.Add("Purchase order not found", Severity.Error);
+                return;
+            }
+
+            var parameters = new DialogParameters
+            {
+                { "PurchaseOrderId", referenceId },
+                { "PurchaseOrderNumber", po.PONumber }
+            };
+
+            var options = new DialogOptions
+            {
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true,
+                CloseButton = true
+            };
+
+            await DialogService.ShowAsync<DocumentViewerDialog>("Delivery Documents", parameters, options);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

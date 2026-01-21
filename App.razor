@@ -1,0 +1,52 @@
+﻿@using Stockit.Services
+@inject IAuthService AuthService
+@inject NavigationManager NavigationManager
+
+@if (!isAuthenticated)
+{
+    <LoginDialog OnLoginSuccess="HandleLoginSuccess" />
+}
+else
+{
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>Not found</PageTitle>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <p role="alert">Sorry, there's nothing at this address.</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
+}
+
+@code {
+    private bool isAuthenticated = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await AuthService.GetCurrentUserAsync();
+        isAuthenticated = user != null;
+    }
+
+    private async Task HandleLoginSuccess()
+    {
+        isAuthenticated = true;
+        
+        // Redirect based on user role
+        var user = await AuthService.GetCurrentUserAsync();
+        if (user?.Role == "FloorSupervisor")
+        {
+            NavigationManager.NavigateTo("/stock-entry", forceLoad: true);
+        }
+        else
+        {
+            // Admin goes to dashboard
+            NavigationManager.NavigateTo("/", forceLoad: true);
+        }
+        
+        StateHasChanged();
+    }
+}

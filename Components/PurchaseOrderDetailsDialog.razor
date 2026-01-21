@@ -1,0 +1,122 @@
+@using Stockit.Models
+
+<MudDialog CloseButton="true">
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.Receipt" Color="Color.Primary" Size="Size.Large" />
+            <div>
+                <MudText Typo="Typo.h6">@PurchaseOrder.PONumber</MudText>
+                <MudChip T="string" Size="Size.Small" Color="GetStatusColor(PurchaseOrder.Status)">
+                    @PurchaseOrder.Status
+                </MudChip>
+            </div>
+        </MudStack>
+    </TitleContent>
+    
+    <DialogContent>
+        <MudStack Spacing="3">
+            <!-- Supplier Info Card -->
+            <MudPaper Elevation="0" Class="pa-4" Style="background-color: #FFFCF2; border-left: 4px solid #EB5E28;">
+                <MudStack Spacing="2">
+                    <MudText Typo="Typo.subtitle2" Style="color: #EB5E28; font-weight: 600;">
+                        <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Small" /> 
+                        SUPPLIER DETAILS
+                    </MudText>
+                    <MudText Typo="Typo.h6" Style="color: #252422;">@PurchaseOrder.Supplier?.SupplierName</MudText>
+                    <MudText Typo="Typo.body2" Style="color: #403D39;">@PurchaseOrder.Supplier?.Email</MudText>
+                </MudStack>
+            </MudPaper>
+
+            <!-- Order Info Grid -->
+            <MudGrid Spacing="2">
+                <MudItem xs="6">
+                    <MudPaper Elevation="1" Class="pa-3">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Style="color: #CCC5B9;">Order Date</MudText>
+                            <MudText Typo="Typo.body1" Style="color: #252422; font-weight: 600;">
+                                @PurchaseOrder.OrderDate.ToShortDateString()
+                            </MudText>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+                
+                <MudItem xs="6">
+                    <MudPaper Elevation="1" Class="pa-3">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Style="color: #CCC5B9;">Expected Delivery</MudText>
+                            <MudText Typo="Typo.body1" Style="color: #252422; font-weight: 600;">
+                                @(PurchaseOrder.ExpectedDeliveryDate?.ToShortDateString() ?? "N/A")
+                            </MudText>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            <!-- Items Table -->
+            <MudPaper Elevation="1" Class="pa-3">
+                <MudText Typo="Typo.subtitle2" Class="mb-3" Style="color: #252422; font-weight: 600;">
+                    ORDER ITEMS
+                </MudText>
+                <MudTable Items="@PurchaseOrder.Items" Hover="true" Dense="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh Style="background-color: #252422; color: #FFFCF2;">Product</MudTh>
+                        <MudTh Style="background-color: #252422; color: #FFFCF2;">Quantity</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.Product?.ProductName</MudText>
+                                <MudText Typo="Typo.caption" Style="color: #CCC5B9;">@context.Product?.ProductCode</MudText>
+                            </MudStack>
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                                @context.OrderedQuantity @context.Product?.UnitOfMeasure
+                            </MudChip>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+
+            @if (!string.IsNullOrEmpty(PurchaseOrder.Notes))
+            {
+                <MudPaper Elevation="1" Class="pa-3" Style="background-color: #f8f9fa;">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2" Style="color: #252422; font-weight: 600;">
+                        NOTES
+                    </MudText>
+                    <MudText Typo="Typo.body2" Style="color: #403D39;">@PurchaseOrder.Notes</MudText>
+                </MudPaper>
+            }
+        </MudStack>
+    </DialogContent>
+    
+    <DialogActions>
+        <MudButton OnClick="Close" Variant="Variant.Text">Close</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Download">
+            Download PDF
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] 
+    public PurchaseOrder PurchaseOrder { get; set; } = null!;
+    
+    [Parameter]
+    public Action? OnClose { get; set; }
+
+    private void Close()
+    {
+        OnClose?.Invoke();
+    }
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "Pending" => Color.Warning,
+        "Sent" => Color.Info,
+        "Delivered" => Color.Primary,
+        "Confirmed" => Color.Success,
+        "Cancelled" => Color.Error,
+        _ => Color.Default
+    };
+}

@@ -1,0 +1,180 @@
+@using Stockit.Models
+@using MudBlazor
+@inject IDialogService DialogService
+
+<MudDialog CloseButton="true">
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.AttachFile" Color="Color.Primary" Size="Size.Large" />
+            <div>
+                <MudText Typo="Typo.h6" Style="color: #000000;">Delivery Documents</MudText>
+                <MudText Typo="Typo.caption" Style="color: #000000;">PO #@PurchaseOrderNumber</MudText>
+            </div>
+        </MudStack>
+    </TitleContent>
+    
+    <DialogContent>
+        @if (Loading)
+        {
+            <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-6">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                <MudText Typo="Typo.body2" Style="color: #000000;">Loading documents...</MudText>
+            </MudStack>
+        }
+        else if (!Documents.Any())
+        {
+            <MudPaper Elevation="0" Class="pa-6" Style="background-color: #FFFCF2; text-align: center;">
+                <MudIcon Icon="@Icons.Material.Outlined.AttachFile" 
+                         Size="Size.Large" 
+                         Style="font-size: 64px; color: #CCC5B9;" />
+                <MudText Typo="Typo.body1" Style="color: #000000; margin-top: 16px;">
+                    No documents attached to this order
+                </MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <MudGrid Spacing="2">
+                @foreach (var doc in Documents)
+                {
+                    <MudItem xs="12">
+                        <MudPaper Elevation="2" Class="pa-3" Style="background-color: #FFFCF2;">
+                            <MudStack Spacing="2">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@GetFileIcon(doc.FileType)" 
+                                             Color="Color.Primary" 
+                                             Size="Size.Large" />
+                                    <div style="flex: 1;">
+                                        <MudText Typo="Typo.body1" Style="font-weight: 600; color: #000000;">
+                                            @doc.FileName
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Style="color: #000000;">
+                                            @FormatFileSize(doc.FileSize)
+                                        </MudText>
+                                    </div>
+                                </MudStack>
+                                
+                                <MudText Typo="Typo.caption" Style="color: #000000;">
+                                    Uploaded: @doc.UploadedAt.ToString("MMM dd, yyyy HH:mm")
+                                </MudText>
+                                
+                                <MudButton Variant="Variant.Filled" 
+                                           Color="Color.Primary" 
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Download"
+                                           OnClick="@(() => DownloadDocument(doc.DocumentID, doc.FileName))"
+                                           FullWidth="true">
+                                    VIEW/DOWNLOAD
+                                </MudButton>
+                            </MudStack>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </DialogContent>
+    
+    @* <DialogActions>
+        <MudButton OnClick="Close" Variant="Variant.Text">Close</MudButton>
+    </DialogActions> *@
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    MudBlazor.IDialogReference DialogReference { get; set; } = null!;
+
+    [Parameter]
+    public int PurchaseOrderId { get; set; }
+
+    [Parameter]
+    public string PurchaseOrderNumber { get; set; } = string.Empty;
+
+    [Inject]
+    private HttpClient Http { get; set; } = null!;
+
+    [Inject]
+    private ISnackbar Snackbar { get; set; } = null!;
+
+    [Inject]
+    private IJSRuntime JSRuntime { get; set; } = null!;
+
+    private List<PurchaseOrderDocument> Documents { get; set; } = new();
+    private bool Loading { get; set; } = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDocuments();
+    }
+
+    private async Task LoadDocuments()
+    {
+        try
+        {
+            Loading = true;
+            var response = await Http.GetAsync($"http://localhost:5041/api/documents/purchase-order/{PurchaseOrderId}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Documents = await response.Content.ReadFromJsonAsync<List<PurchaseOrderDocument>>() ?? new();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading documents: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private async Task DownloadDocument(int documentId, string fileName)
+    {
+        try
+        {
+            var response = await Http.GetAsync($"http://localhost:5041/api/documents/download/{documentId}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var fileBytes = await response.Content.ReadAsByteArrayAsync();
+                await JSRuntime.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(fileBytes));
+                Snackbar.Add($"Downloaded {fileName}", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to download document", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string GetFileIcon(string fileType)
+    {
+        if (fileType.Contains("pdf"))
+            return Icons.Material.Filled.PictureAsPdf;
+        if (fileType.Contains("image"))
+            return Icons.Material.Filled.Image;
+        return Icons.Material.Filled.InsertDriveFile;
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private void Close()
+    {
+        DialogReference.Close(DialogResult.Ok(true));
+    }
+}

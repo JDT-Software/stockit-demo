@@ -1,0 +1,1665 @@
+﻿@page "/purchase-orders"
+@using Stockit.Models
+@using Stockit.Components
+@using Microsoft.AspNetCore.Components.Forms
+@inject IPurchaseOrderService PurchaseOrderService
+@inject IProductService ProductService
+@inject ISupplierService SupplierService
+@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IAuthorizationService AuthorizationService
+@inject IJSRuntime JSRuntime
+
+<AuthorizeView RequirePermission="@(() => AuthorizationService.CanAccessPurchaseOrdersAsync())">
+    <PageTitle>Purchase Orders - Stockit</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Class="mr-2" />
+        Purchase Orders
+    </MudText>
+
+    @if (isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else
+    {
+        <!-- Status Tabs -->
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" @bind-ActivePanelIndex="activeTab">
+            <!-- PENDING TAB -->
+            <MudTabPanel Text="PENDING" Icon="@Icons.Material.Filled.Pending">
+                <MudTable Items="@pendingOrders" 
+                          Hover="true" 
+                          Breakpoint="Breakpoint.Sm" 
+                          Loading="@isLoading" 
+                          LoadingProgressColor="Color.Primary">
+                    <HeaderContent>
+                        <MudTh>Order #</MudTh>
+                        <MudTh>Supplier</MudTh>
+                        <MudTh>Order Date</MudTh>
+                        <MudTh>Expected Delivery</MudTh>
+                        <MudTh>Items</MudTh>
+                        <MudTh>Total Amount</MudTh>
+                        <MudTh Style="width: 50px;"></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Order #">
+                            <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.PONumber</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Supplier">@context.Supplier?.SupplierName</MudTd>
+                        <MudTd DataLabel="Order Date">@context.OrderDate.ToShortDateString()</MudTd>
+                        <MudTd DataLabel="Expected Delivery">@(context.ExpectedDeliveryDate?.ToShortDateString() ?? "N/A")</MudTd>
+                        <MudTd DataLabel="Items">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning">
+                                @context.Items.Count items
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Total Amount">
+                            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #EB5E28;">
+                                R @context.TotalAmount.ToString("N2")
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@(expandedPendingOrderId == context.PurchaseOrderID ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                           OnClick="@(() => ToggleExpandPending(context.PurchaseOrderID))"
+                                           Color="Color.Primary" />
+                        </MudTd>
+                    </RowTemplate>
+                    <ChildRowContent>
+                        @if (expandedPendingOrderId == context.PurchaseOrderID)
+                        {
+                            <MudTr>
+                                <td colspan="7">
+                                    <MudCard Elevation="0" Class="ma-4">
+                                        <MudCardContent>
+                                            <MudGrid Spacing="3">
+                                                <!-- Order Details Section -->
+                                                <MudItem xs="12" md="7">
+                                                    <MudPaper Elevation="2" Class="pa-4">
+                                                        <MudStack Spacing="2">
+                                                            <MudText Typo="Typo.h6" Style="color: #EB5E28;">
+                                                                <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Small" /> 
+                                                                Order Details
+                                                            </MudText>
+                                                            
+                                                            <MudDivider />
+
+                                                            <MudGrid Spacing="2">
+                                                                <MudItem xs="6">
+                                                                    <MudText Typo="Typo.caption" Style="color: #000000;">Supplier</MudText>
+                                                                    <MudText Typo="Typo.body1" Style="font-weight: 600; color: #000000;">
+                                                                        @context.Supplier?.SupplierName
+                                                                    </MudText>
+                                                                    <MudText Typo="Typo.caption" Style="color: #000000;">
+                                                                        @context.Supplier?.Email
+                                                                    </MudText>
+                                                                </MudItem>
+                                                                <MudItem xs="6">
+                                                                    <MudText Typo="Typo.caption" Style="color: #000000;">Lead Time</MudText>
+                                                                    <MudText Typo="Typo.body1" Style="font-weight: 600; color: #000000;">
+                                                                        @context.Supplier?.LeadTimeDays days
+                                                                    </MudText>
+                                                                </MudItem>
+                                                                <MudItem xs="6">
+                                                                    <MudText Typo="Typo.caption" Style="color: #000000;">Order Date</MudText>
+                                                                    <MudText Typo="Typo.body1" Style="font-weight: 600; color: #000000;">
+                                                                        @context.OrderDate.ToString("MMM dd, yyyy")
+                                                                    </MudText>
+                                                                </MudItem>
+                                                                <MudItem xs="6">
+                                                                    <MudText Typo="Typo.caption" Style="color: #000000;">Expected Delivery</MudText>
+                                                                    <MudText Typo="Typo.body1" Style="font-weight: 600; color: #000000;">
+                                                                        @(context.ExpectedDeliveryDate?.ToString("MMM dd, yyyy") ?? "N/A")
+                                                                    </MudText>
+                                                                </MudItem>
+                                                            </MudGrid>
+                                                            
+                                                            <MudDivider Class="my-2" />
+                                                            
+                                                            <MudText Typo="Typo.subtitle2" Style="color: #000000; font-weight: 600;">
+                                                                Items to Order:
+                                                            </MudText>
+                                                            
+                                                            @foreach (var item in context.Items)
+                                                            {
+                                                                <MudPaper Elevation="0" Class="pa-2" Style="background-color: #FFFCF2;">
+                                                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                                                        <div>
+                                                                            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #000000;">
+                                                                                @item.Product?.ProductName
+                                                                            </MudText>
+                                                                            <MudText Typo="Typo.caption" Style="color: #000000;">
+                                                                                @item.Product?.ProductCode
+                                                                            </MudText>
+                                                                        </div>
+                                                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">
+                                                                            @item.OrderedQuantity @item.Product?.UnitOfMeasure
+                                                                        </MudChip>
+                                                                    </MudStack>
+                                                                </MudPaper>
+                                                            }
+
+                                                            <MudDivider Class="my-2" />
+
+                                                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                                                <MudText Typo="Typo.h6" Style="color: #000000;">Total Amount:</MudText>
+                                                                <MudText Typo="Typo.h6" Style="color: #DC2F02; font-weight: 700;">
+                                                                    R @context.TotalAmount.ToString("N2")
+                                                                </MudText>
+                                                            </MudStack>
+
+                                                            @if (!string.IsNullOrEmpty(context.Notes))
+                                                            {
+                                                                <MudDivider Class="my-2" />
+                                                                <MudText Typo="Typo.subtitle2" Style="color: #252422; font-weight: 600;">
+                                                                    Notes:
+                                                                </MudText>
+                                                                <MudPaper Elevation="0" Class="pa-2" Style="background-color: #f8f9fa;">
+                                                                    <MudText Typo="Typo.body2" Style="color: #403D39;">
+                                                                        @context.Notes
+                                                                    </MudText>
+                                                                </MudPaper>
+                                                            }
+                                                        </MudStack>
+                                                    </MudPaper>
+                                                </MudItem>
+
+                                                <!-- Action Section -->
+                                                <MudItem xs="12" md="5">
+                                                    <MudPaper Elevation="2" Class="pa-4">
+                                                        <MudStack Spacing="3">
+                                                            <MudText Typo="Typo.h6" Style="color: #EB5E28;">
+                                                                <MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" /> 
+                                                                Ready to Send
+                                                            </MudText>
+                                                            
+                                                            <MudDivider />
+                                                            
+                                                            <MudPaper Elevation="0" 
+                                                                      Class="pa-4 d-flex justify-center align-center" 
+                                                                      Style="background-color: #FFFCF2; border: 2px solid #EB5E28; border-radius: 8px; min-height: 200px;">
+                                                                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                                                    <MudIcon Icon="@Icons.Material.Filled.Drafts" 
+                                                                             Size="Size.Large" 
+                                                                             Style="font-size: 80px;" 
+                                                                             Color="Color.Warning" />
+                                                                    <MudText Typo="Typo.h6" Align="Align.Center" Style="color: #252422; font-weight: 600;">
+                                                                        Order Not Sent
+                                                                    </MudText>
+                                                                    <MudText Typo="Typo.body2" Align="Align.Center" Style="color: #403D39;">
+                                                                        Review order details and send to supplier
+                                                                    </MudText>
+                                                                </MudStack>
+                                                            </MudPaper>
+
+                                                            <!-- Action Buttons -->
+                                                            <MudStack Spacing="2" Class="mt-3">
+                                                                <MudButton Variant="Variant.Filled" 
+                                                                           Color="Color.Primary"
+                                                                           StartIcon="@Icons.Material.Filled.Send"
+                                                                           OnClick="@(() => SendToSupplierFromExpanded(context))"
+                                                                           FullWidth="true"
+                                                                           Size="Size.Large">
+                                                                    Send to Supplier
+                                                                </MudButton>
+                                                                
+                                                                <MudButton Variant="Variant.Outlined" 
+                                                                           Color="Color.Info"
+                                                                           StartIcon="@Icons.Material.Filled.Preview"
+                                                                           OnClick="@(() => ViewDetails(context))"
+                                                                           FullWidth="true">
+                                                                    Preview Details
+                                                                </MudButton>
+                                                                
+                                                                <MudButton Variant="Variant.Outlined" 
+                                                                           Color="Color.Primary"
+                                                                           StartIcon="@Icons.Material.Filled.Download"
+                                                                           OnClick="@(() => DownloadPdf(context))"
+                                                                           FullWidth="true">
+                                                                    Download PDF
+                                                                </MudButton>
+                                                                
+                                                                <MudDivider Class="my-2" />
+                                                                
+                                                                <MudButton Variant="Variant.Outlined" 
+                                                                           Color="Color.Error"
+                                                                           StartIcon="@Icons.Material.Filled.Cancel"
+                                                                           OnClick="@(() => CancelOrder(context))"
+                                                                           FullWidth="true">
+                                                                    Cancel Order
+                                                                </MudButton>
+                                                                
+                                                                <MudButton Variant="Variant.Text" 
+                                                                           Color="Color.Default"
+                                                                           OnClick="@(() => ToggleExpandPending(context.PurchaseOrderID))"
+                                                                           FullWidth="true">
+                                                                    Close
+                                                                </MudButton>
+                                                            </MudStack>
+                                                        </MudStack>
+                                                    </MudPaper>
+                                                </MudItem>
+                                            </MudGrid>
+                                        </MudCardContent>
+                                    </MudCard>
+                                </td>
+                            </MudTr>
+                        }
+                    </ChildRowContent>
+                </MudTable>
+            </MudTabPanel>
+
+            <!-- SENT TAB -->
+            <MudTabPanel Text="SENT" Icon="@Icons.Material.Filled.Send">
+                <MudTable Items="@sentOrders" 
+                          Hover="true" 
+                          Breakpoint="Breakpoint.Sm" 
+                          Loading="@isLoading" 
+                          LoadingProgressColor="Color.Primary">
+                    <HeaderContent>
+                        <MudTh>Order #</MudTh>
+                        <MudTh>Supplier</MudTh>
+                        <MudTh>Order Date</MudTh>
+                        <MudTh>Expected Delivery</MudTh>
+                        <MudTh>Items</MudTh>
+                        <MudTh Style="width: 50px;"></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Order #">
+                            <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.PONumber</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Supplier">@context.Supplier?.SupplierName</MudTd>
+                        <MudTd DataLabel="Order Date">@context.OrderDate.ToShortDateString()</MudTd>
+                        <MudTd DataLabel="Expected Delivery">@(context.ExpectedDeliveryDate?.ToShortDateString() ?? "N/A")</MudTd>
+                        <MudTd DataLabel="Items">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                @context.Items.Count items
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@(expandedSentOrderId == context.PurchaseOrderID ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                           OnClick="@(() => ToggleExpandSent(context.PurchaseOrderID))"
+                                           Color="Color.Primary" />
+                        </MudTd>
+                    </RowTemplate>
+                    <ChildRowContent>
+                        @if (expandedSentOrderId == context.PurchaseOrderID)
+                        {
+                            <MudTr>
+                                <td colspan="6">
+                                    <MudCard Elevation="0" Class="ma-4">
+                                        <MudCardContent>
+                                            <MudGrid Spacing="3">
+                                                <!-- Order Details Section -->
+                                                <MudItem xs="12" md="7">
+                                                    <MudPaper Elevation="2" Class="pa-4">
+                                                        <MudStack Spacing="2">
+                                                            <MudText Typo="Typo.h6" Style="color: #DC2F02;">
+                                                                <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Small" /> 
+                                                                Order Details
+                                                            </MudText>
+                                                            
+                                                            <MudDivider />
+                                                            
+                                                            <MudText Typo="Typo.subtitle2" Style="color: #000000; font-weight: 600;">
+                                                                Sent to: @context.Supplier?.SupplierName
+                                                            </MudText>
+                                                            <MudText Typo="Typo.body2" Style="color: #000000;">
+                                                                @context.Supplier?.Email
+                                                            </MudText>
+                                                            
+                                                            <MudDivider Class="my-2" />
+                                                            
+                                                            <MudText Typo="Typo.subtitle2" Style="color: #000000; font-weight: 600;">
+                                                                Ordered Items:
+                                                            </MudText>
+                                                            
+                                                            @foreach (var item in context.Items)
+                                                            {
+                                                                <MudPaper Elevation="0" Class="pa-2" Style="background-color: #FFFCF2;">
+                                                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                                                        <div>
+                                                                            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #000000;">
+                                                                                @item.Product?.ProductName
+                                                                            </MudText>
+                                                                            <MudText Typo="Typo.caption" Style="color: #000000;">
+                                                                                @item.Product?.ProductCode
+                                                                            </MudText>
+                                                                        </div>
+                                                                        <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                                                            @item.OrderedQuantity @item.Product?.UnitOfMeasure
+                                                                        </MudChip>
+                                                                    </MudStack>
+                                                                </MudPaper>
+                                                            }
+
+                                                            @if (!string.IsNullOrEmpty(context.Notes))
+                                                            {
+                                                                <MudDivider Class="my-2" />
+                                                                <MudText Typo="Typo.subtitle2" Style="color: #000000; font-weight: 600;">
+                                                                    Notes:
+                                                                </MudText>
+                                                                <MudPaper Elevation="0" Class="pa-2" Style="background-color: #f8f9fa;">
+                                                                    <MudText Typo="Typo.body2" Style="color: #000000;">
+                                                                        @context.Notes
+                                                                    </MudText>
+                                                                </MudPaper>
+                                                            }
+                                                        </MudStack>
+                                                    </MudPaper>
+                                                </MudItem>
+
+                                                <!-- Action Section -->
+                                                <MudItem xs="12" md="5">
+                                                    <MudPaper Elevation="2" Class="pa-4">
+                                                        <MudStack Spacing="3">
+                                                            <MudText Typo="Typo.h6" Style="color: #EB5E28;">
+                                                                <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Small" /> 
+                                                                Delivery Status
+                                                            </MudText>
+                                                            
+                                                            <MudDivider />
+                                                            
+                                                            <MudPaper Elevation="0" 
+                                                                      Class="pa-4 d-flex justify-center align-center" 
+                                                                      Style="background-color: #FFFCF2; border: 2px solid #EB5E28; border-radius: 8px; min-height: 150px;">
+                                                                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                                                    <MudIcon Icon="@Icons.Material.Filled.LocalShipping" 
+                                                                             Size="Size.Large" 
+                                                                             Style="font-size: 64px;" 
+                                                                             Color="Color.Info" />
+                                                                    <MudText Typo="Typo.body1" Align="Align.Center" Style="color: #252422; font-weight: 600;">
+                                                                        Waiting for Delivery
+                                                                    </MudText>
+                                                                    <MudText Typo="Typo.body2" Align="Align.Center" Style="color: #403D39;">
+                                                                        Expected: @(context.ExpectedDeliveryDate?.ToString("MMM dd, yyyy") ?? "N/A")
+                                                                    </MudText>
+                                                                </MudStack>
+                                                            </MudPaper>
+
+                                                            <!-- Action Buttons -->
+                                                            <MudStack Spacing="2" Class="mt-3">
+                                                                <MudButton Variant="Variant.Filled" 
+                                                                           Color="Color.Success"
+                                                                           StartIcon="@Icons.Material.Filled.CheckCircle"
+                                                                           OnClick="@(() => MarkAsDeliveredFromExpanded(context))"
+                                                                           FullWidth="true"
+                                                                           Size="Size.Large">
+                                                                    Mark as Delivered
+                                                                </MudButton>
+                                                                
+                                                                <MudButton Variant="Variant.Outlined" 
+                                                                           Color="Color.Primary"
+                                                                           StartIcon="@Icons.Material.Filled.Download"
+                                                                           OnClick="@(() => DownloadPdf(context))"
+                                                                           FullWidth="true">
+                                                                    Download PDF
+                                                                </MudButton>
+                                                                
+                                                                <MudDivider Class="my-2" />
+                                                                
+                                                                <MudButton Variant="Variant.Outlined" 
+                                                                           Color="Color.Error"
+                                                                           StartIcon="@Icons.Material.Filled.Cancel"
+                                                                           OnClick="@(() => CancelOrder(context))"
+                                                                           FullWidth="true">
+                                                                    Cancel Order
+                                                                </MudButton>
+                                                                
+                                                                <MudButton Variant="Variant.Text" 
+                                                                           Color="Color.Default"
+                                                                           OnClick="@(() => ToggleExpandSent(context.PurchaseOrderID))"
+                                                                           FullWidth="true">
+                                                                    Close
+                                                                </MudButton>
+                                                            </MudStack>
+                                                        </MudStack>
+                                                    </MudPaper>
+                                                </MudItem>
+                                            </MudGrid>
+                                        </MudCardContent>
+                                    </MudCard>
+                                </td>
+                            </MudTr>
+                        }
+                    </ChildRowContent>
+                </MudTable>
+            </MudTabPanel>
+
+
+            <!-- DELIVERED TAB -->
+            <MudTabPanel Text="DELIVERED" Icon="@Icons.Material.Filled.LocalShipping">
+                <MudTable Items="@deliveredOrders" 
+                          Hover="true" 
+                          Breakpoint="Breakpoint.Sm" 
+                          Loading="@isLoading" 
+                          LoadingProgressColor="Color.Primary"
+                          @ref="deliveredTable">
+                    <HeaderContent>
+                        <MudTh>Order #</MudTh>
+                        <MudTh>Supplier</MudTh>
+                        <MudTh>Order Date</MudTh>
+                        <MudTh>Expected Delivery</MudTh>
+                        <MudTh>Items</MudTh>
+                        <MudTh Style="width: 50px;"></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Order #">
+                            <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.PONumber</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Supplier">@context.Supplier?.SupplierName</MudTd>
+                        <MudTd DataLabel="Order Date">@context.OrderDate.ToShortDateString()</MudTd>
+                        <MudTd DataLabel="Expected Delivery">@(context.ExpectedDeliveryDate?.ToShortDateString() ?? "N/A")</MudTd>
+                        <MudTd DataLabel="Items">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                                @context.Items.Count items
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@(expandedOrderId == context.PurchaseOrderID ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                           OnClick="@(() => ToggleExpand(context.PurchaseOrderID))"
+                                           Color="Color.Primary" />
+                        </MudTd>
+                    </RowTemplate>
+                    <ChildRowContent>
+                        @if (expandedOrderId == context.PurchaseOrderID)
+                        {
+                            <MudTr>
+                                <td colspan="6">
+                                    <MudCard Elevation="0" Class="ma-4">
+                                        <MudCardContent>
+                                            <MudGrid Spacing="3">
+                                                <!-- Order Details Section -->
+                                                <MudItem xs="12" md="6">
+                                                    <MudPaper Elevation="2" Class="pa-4">
+                                                        <MudStack Spacing="2">
+                                                            <MudText Typo="Typo.h6" Style="color: #EB5E28;">
+                                                                <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Small" /> 
+                                                                Order Details
+                                                            </MudText>
+                                                            
+                                                            <MudDivider />
+                                                            
+                                                            <MudText Typo="Typo.subtitle2" Style="color: #252422; font-weight: 600;">
+                                                                Items to Receive:
+                                                            </MudText>
+                                                            
+                                                            @foreach (var item in context.Items)
+                                                            {
+                                                                <MudPaper Elevation="0" Class="pa-2" Style="background-color: #FFFCF2;">
+                                                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                                                        <div>
+                                                                            <MudText Typo="Typo.body2" Style="font-weight: 600;">
+                                                                                @item.Product?.ProductName
+                                                                            </MudText>
+                                                                            <MudText Typo="Typo.caption" Style="color: #CCC5B9;">
+                                                                                @item.Product?.ProductCode
+                                                                            </MudText>
+                                                                        </div>
+                                                                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                                                                            @item.OrderedQuantity @item.Product?.UnitOfMeasure
+                                                                        </MudChip>
+                                                                    </MudStack>
+                                                                </MudPaper>
+                                                            }
+                                                        </MudStack>
+                                                    </MudPaper>
+                                                </MudItem>
+
+                                                <!-- Document Upload Section -->
+                                                <MudItem xs="12" md="6">
+                                                    <MudPaper Elevation="2" Class="pa-4">
+                                                        <MudStack Spacing="3">
+                                                            <MudText Typo="Typo.h6" Style="color: #EB5E28;">
+                                                                <MudIcon Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" /> 
+                                                                Delivery Documents
+                                                            </MudText>
+                                                            
+                                                            <MudDivider />
+                                                            
+                                                            <MudText Typo="Typo.body2" Style="color: #403D39;">
+                                                                Upload delivery photos, invoices, or proof of delivery (optional)
+                                                            </MudText>
+
+                                                            <!-- File Upload Area -->
+                                                            <InputFile id="@($"fileInput-{context.PurchaseOrderID}")" 
+                                                                       OnChange="@((e) => OnFilesSelected(e, context.PurchaseOrderID))" 
+                                                                       multiple 
+                                                                       accept="image/jpeg,image/jpg,image/png,application/pdf"
+                                                                       hidden />
+
+                                                            <MudPaper Elevation="0" 
+                                                                      Class="pa-4 d-flex justify-center align-center" 
+                                                                      Style="background-color: #FFFCF2; border: 2px dashed #EB5E28; border-radius: 8px; min-height: 120px; cursor: pointer;"
+                                                                      @onclick="@(() => TriggerFileInput(context.PurchaseOrderID))">
+                                                                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                                                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" 
+                                                                             Size="Size.Large" 
+                                                                             Color="Color.Primary" />
+                                                                    <MudText Typo="Typo.body2" Align="Align.Center" Style="color: #403D39;">
+                                                                        Click to upload files
+                                                                    </MudText>
+                                                                    <MudText Typo="Typo.caption" Align="Align.Center" Style="color: #CCC5B9;">
+                                                                        Photos (JPG, PNG) or PDFs • Max 10MB per file
+                                                                    </MudText>
+                                                                </MudStack>
+                                                            </MudPaper>
+
+                                                            @if (uploadedFiles.ContainsKey(context.PurchaseOrderID) && uploadedFiles[context.PurchaseOrderID].Any())
+                                                            {
+                                                                <MudStack Spacing="1">
+                                                                    <MudText Typo="Typo.caption" Style="color: #CCC5B9;">
+                                                                        Selected Files (@uploadedFiles[context.PurchaseOrderID].Count):
+                                                                    </MudText>
+                                                                    @foreach (var file in uploadedFiles[context.PurchaseOrderID])
+                                                                    {
+                                                                        <MudChip T="string" 
+                                                                                 Size="Size.Small" 
+                                                                                 Color="Color.Success"
+                                                                                 Icon="@Icons.Material.Filled.AttachFile"
+                                                                                 OnClose="@(() => RemoveFile(context.PurchaseOrderID, file))">
+                                                                            @file.Name (@FormatFileSize(file.Size))
+                                                                        </MudChip>
+                                                                    }
+                                                                </MudStack>
+                                                            }
+
+                                                            <!-- Action Buttons -->
+                                                            <MudStack Row="true" Spacing="2" Class="mt-4">
+                                                                <MudButton Variant="Variant.Outlined" 
+                                                                           Color="Color.Default"
+                                                                           OnClick="@(() => ToggleExpand(context.PurchaseOrderID))">
+                                                                    Cancel
+                                                                </MudButton>
+                                                                <MudButton Variant="Variant.Filled" 
+                                                                           Color="Color.Primary"
+                                                                           StartIcon="@Icons.Material.Filled.CheckCircle"
+                                                                           OnClick="@(() => ConfirmAndReceiveStock(context))"
+                                                                           FullWidth="true">
+                                                                    Confirm & Receive Stock
+                                                                </MudButton>
+                                                            </MudStack>
+                                                        </MudStack>
+                                                    </MudPaper>
+                                                </MudItem>
+                                            </MudGrid>
+                                        </MudCardContent>
+                                    </MudCard>
+                                </td>
+                            </MudTr>
+                        }
+                    </ChildRowContent>
+                </MudTable>
+            </MudTabPanel>
+
+            <!-- CONFIRMED TAB -->
+            <MudTabPanel Text="CONFIRMED" Icon="@Icons.Material.Filled.CheckCircle">
+                <MudTable Items="@confirmedOrders" 
+                          Hover="true" 
+                          Breakpoint="Breakpoint.Sm" 
+                          Loading="@isLoading" 
+                          LoadingProgressColor="Color.Primary">
+                    <HeaderContent>
+                        <MudTh>Order #</MudTh>
+                        <MudTh>Supplier</MudTh>
+                        <MudTh>Order Date</MudTh>
+                        <MudTh>Confirmed Date</MudTh>
+                        <MudTh>Items</MudTh>
+                        <MudTh>Documents</MudTh>
+                        <MudTh Style="width: 50px;"></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Order #">
+                            <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.PONumber</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Supplier">@context.Supplier?.SupplierName</MudTd>
+                        <MudTd DataLabel="Order Date">@context.OrderDate.ToShortDateString()</MudTd>
+                        <MudTd DataLabel="Confirmed Date">@(context.ExpectedDeliveryDate?.ToShortDateString() ?? "N/A")</MudTd>
+                        <MudTd DataLabel="Items">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success">
+                                @context.Items.Count items
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Documents">
+                            @if (documentCounts.ContainsKey(context.PurchaseOrderID))
+                            {
+                                var count = documentCounts[context.PurchaseOrderID];
+                                <MudChip T="string" 
+                                         Size="Size.Small" 
+                                         Color="@(count > 0 ? Color.Success : Color.Default)"
+                                         Icon="@(count > 0 ? Icons.Material.Filled.AttachFile : Icons.Material.Outlined.AttachFile)">
+                                    @count doc@(count != 1 ? "s" : "")
+                                </MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default">
+                                    Loading...
+                                </MudChip>
+                            }
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@(expandedConfirmedOrderId == context.PurchaseOrderID ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                           OnClick="@(() => ToggleExpandConfirmed(context.PurchaseOrderID))"
+                                           Color="Color.Primary" />
+                        </MudTd>
+                    </RowTemplate>
+                    <ChildRowContent>
+                        @if (expandedConfirmedOrderId == context.PurchaseOrderID)
+                        {
+                            <MudTr>
+                                <td colspan="7">
+                                    <MudCard Elevation="0" Class="ma-4">
+                                        <MudCardContent>
+                                            <MudGrid Spacing="3">
+                                                <!-- Order Summary Section -->
+                                                <MudItem xs="12" md="4">
+                                                    <MudPaper Elevation="2" Class="pa-4" Style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white;">
+                                                        <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" 
+                                                                     Size="Size.Large" 
+                                                                     Style="font-size: 72px;" />
+                                                            <MudText Typo="Typo.h5" Align="Align.Center" Style="font-weight: 600;">
+                                                                Order Confirmed
+                                                            </MudText>
+                                                            <MudText Typo="Typo.body1" Align="Align.Center">
+                                                                Stock Received & Updated
+                                                            </MudText>
+                                                            <MudDivider DividerType="DividerType.Middle" Style="background-color: rgba(255,255,255,0.3);" />
+                                                            <MudText Typo="Typo.body2" Align="Align.Center">
+                                                                PO: <strong>@context.PONumber</strong>
+                                                            </MudText>
+                                                            <MudText Typo="Typo.caption" Align="Align.Center">
+                                                                Confirmed: @(context.ExpectedDeliveryDate?.ToShortDateString() ?? "N/A")
+                                                            </MudText>
+                                                        </MudStack>
+                                                    </MudPaper>
+                                                </MudItem>
+
+                                                <!-- Order Details Section -->
+                                                <MudItem xs="12" md="8">
+                                                    <MudPaper Elevation="2" Class="pa-4">
+                                                        <MudStack Spacing="2">
+                                                            <MudText Typo="Typo.h6" Style="color: #DC2F02;">
+                                                                <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Small" /> 
+                                                                Order Details
+                                                            </MudText>
+                                                            
+                                                            <MudDivider />
+
+                                                            <MudGrid Spacing="2">
+                                                                <MudItem xs="6">
+                                                                    <MudText Typo="Typo.caption" Style="color: #000000;">Supplier</MudText>
+                                                                    <MudText Typo="Typo.body1" Style="font-weight: 600; color: #000000;">
+                                                                        @context.Supplier?.SupplierName
+                                                                    </MudText>
+                                                                </MudItem>
+                                                                <MudItem xs="6">
+                                                                    <MudText Typo="Typo.caption" Style="color: #000000;">Order Date</MudText>
+                                                                    <MudText Typo="Typo.body1" Style="font-weight: 600; color: #000000;">
+                                                                        @context.OrderDate.ToShortDateString()
+                                                                    </MudText>
+                                                                </MudItem>
+                                                                <MudItem xs="6">
+                                                                    <MudText Typo="Typo.caption" Style="color: #000000;">Total Amount</MudText>
+                                                                    <MudText Typo="Typo.body1" Style="font-weight: 600; color: #DC2F02;">
+                                                                        R @context.TotalAmount.ToString("N2")
+                                                                    </MudText>
+                                                                </MudItem>
+                                                                <MudItem xs="6">
+                                                                    <MudText Typo="Typo.caption" Style="color: #000000;">Items Received</MudText>
+                                                                    <MudText Typo="Typo.body1" Style="font-weight: 600; color: #000000;">
+                                                                        @context.Items.Count items
+                                                                    </MudText>
+                                                                </MudItem>
+                                                            </MudGrid>
+                                                            
+                                                            <MudDivider Class="my-2" />
+                                                            
+                                                            <MudText Typo="Typo.subtitle2" Style="color: #000000; font-weight: 600;">
+                                                                Received Items:
+                                                            </MudText>
+                                                            
+                                                            @foreach (var item in context.Items)
+                                                            {
+                                                                <MudPaper Elevation="0" Class="pa-2" Style="background-color: #FFFCF2;">
+                                                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                                                        <div>
+                                                                            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #000000;">
+                                                                                @item.Product?.ProductName
+                                                                            </MudText>
+                                                                            <MudText Typo="Typo.caption" Style="color: #000000;">
+                                                                                @item.Product?.ProductCode
+                                                                            </MudText>
+                                                                        </div>
+                                                                        <MudStack Row="true" Spacing="1">
+                                                                            <MudChip T="string" Size="Size.Small" Color="Color.Success">
+                                                                                Received: @item.ReceivedQuantity @item.Product?.UnitOfMeasure
+                                                                            </MudChip>
+                                                                            @if (item.OrderedQuantity != item.ReceivedQuantity)
+                                                                            {
+                                                                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">
+                                                                                    Ordered: @item.OrderedQuantity
+                                                                                </MudChip>
+                                                                            }
+                                                                        </MudStack>
+                                                                    </MudStack>
+                                                                </MudPaper>
+                                                            }
+
+                                                            @if (!string.IsNullOrEmpty(context.Notes))
+                                                            {
+                                                                <MudDivider Class="my-2" />
+                                                                <MudText Typo="Typo.subtitle2" Style="color: #252422; font-weight: 600;">
+                                                                    Notes:
+                                                                </MudText>
+                                                                <MudPaper Elevation="0" Class="pa-2" Style="background-color: #f8f9fa;">
+                                                                    <MudText Typo="Typo.body2" Style="color: #403D39;">
+                                                                        @context.Notes
+                                                                    </MudText>
+                                                                </MudPaper>
+                                                            }
+                                                        </MudStack>
+                                                    </MudPaper>
+                                                </MudItem>
+
+                                                <!-- Documents Section -->
+                                                <MudItem xs="12">
+                                                    <MudPaper Elevation="2" Class="pa-4">
+                                                        <MudStack Spacing="2">
+                                                            <MudText Typo="Typo.h6" Style="color: #EB5E28;">
+                                                                <MudIcon Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" /> 
+                                                                Delivery Documents
+                                                            </MudText>
+                                                            
+                                                            <MudDivider />
+                                                            
+                                                            @if (confirmedDocuments.ContainsKey(context.PurchaseOrderID))
+                                                            {
+                                                                var docs = confirmedDocuments[context.PurchaseOrderID];
+                                                                
+                                                                if (docs.Any())
+                                                                {
+                                                                    <MudGrid Spacing="2">
+                                                                        @foreach (var doc in docs)
+                                                                        {
+                                                                            <MudItem xs="12" sm="6" md="4">
+                                                                                <MudPaper Elevation="1" Class="pa-3" Style="background-color: #FFFCF2;">
+                                                                                    <MudStack Spacing="1">
+                                                                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                                                                            <MudIcon Icon="@GetFileIcon(doc.FileType)" 
+                                                                                                     Color="Color.Primary" 
+                                                                                                     Size="Size.Medium" />
+                                                                                            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #252422;">
+                                                                                                @doc.FileName
+                                                                                            </MudText>
+                                                                                        </MudStack>
+                                                                                        
+                                                                                        <MudText Typo="Typo.caption" Style="color: #CCC5B9;">
+                                                                                            Uploaded: @doc.UploadedAt.ToString("MMM dd, yyyy HH:mm")
+                                                                                        </MudText>
+                                                                                        
+                                                                                        <MudText Typo="Typo.caption" Style="color: #CCC5B9;">
+                                                                                            Size: @FormatFileSize(doc.FileSize)
+                                                                                        </MudText>
+                                                                                        
+                                                                                        <MudButton Variant="Variant.Filled" 
+                                                                                                   Color="Color.Primary" 
+                                                                                                   Size="Size.Small"
+                                                                                                   StartIcon="@Icons.Material.Filled.Download"
+                                                                                                   OnClick="@(() => DownloadDocument(doc.DocumentID, doc.FileName))"
+                                                                                                   FullWidth="true">
+                                                                                            View/Download
+                                                                                        </MudButton>
+                                                                                    </MudStack>
+                                                                                </MudPaper>
+                                                                            </MudItem>
+                                                                        }
+                                                                    </MudGrid>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <MudText Typo="Typo.body2" Style="color: #CCC5B9;">
+                                                                        No documents attached to this order.
+                                                                    </MudText>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Small" />
+                                                                <MudText Typo="Typo.caption">Loading documents...</MudText>
+                                                            }
+                                                        </MudStack>
+                                                    </MudPaper>
+                                                </MudItem>
+
+                                                <!-- Action Buttons -->
+                                                <MudItem xs="12">
+                                                    <MudStack Row="true" Spacing="2" Justify="Justify.Center">
+                                                        <MudButton Variant="Variant.Outlined" 
+                                                                   Color="Color.Primary"
+                                                                   StartIcon="@Icons.Material.Filled.Visibility"
+                                                                   OnClick="@(() => ViewDetails(context))">
+                                                            View Full Details
+                                                        </MudButton>
+                                                        
+                                                        <MudButton Variant="Variant.Filled" 
+                                                                   Color="Color.Primary"
+                                                                   StartIcon="@Icons.Material.Filled.Download"
+                                                                   OnClick="@(() => DownloadPdf(context))">
+                                                            Download PDF
+                                                        </MudButton>
+                                                        
+                                                        <MudButton Variant="Variant.Text" 
+                                                                   Color="Color.Default"
+                                                                   OnClick="@(() => ToggleExpandConfirmed(context.PurchaseOrderID))">
+                                                            Close
+                                                        </MudButton>
+                                                    </MudStack>
+                                                </MudItem>
+                                            </MudGrid>
+                                        </MudCardContent>
+                                    </MudCard>
+                                </td>
+                            </MudTr>
+                        }
+                    </ChildRowContent>
+                </MudTable>
+            </MudTabPanel>
+
+            <!-- CANCELLED TAB -->
+            <MudTabPanel Text="CANCELLED" Icon="@Icons.Material.Filled.Cancel">
+                <MudTable Items="@cancelledOrders" 
+                          Hover="true" 
+                          Breakpoint="Breakpoint.Sm" 
+                          Loading="@isLoading" 
+                          LoadingProgressColor="Color.Primary">
+                    <HeaderContent>
+                        <MudTh>Order #</MudTh>
+                        <MudTh>Supplier</MudTh>
+                        <MudTh>Order Date</MudTh>
+                        <MudTh>Expected Delivery</MudTh>
+                        <MudTh>Items</MudTh>
+                        <MudTh>Total Amount</MudTh>
+                        <MudTh Style="width: 50px;"></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Order #">
+                            <MudText Typo="Typo.body2" Style="font-weight: 600; text-decoration: line-through; color: #6c757d;">
+                                @context.PONumber
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Supplier">
+                            <MudText Style="color: #6c757d;">@context.Supplier?.SupplierName</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Order Date">
+                            <MudText Style="color: #6c757d;">@context.OrderDate.ToShortDateString()</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Expected Delivery">
+                            <MudText Style="color: #6c757d;">@(context.ExpectedDeliveryDate?.ToShortDateString() ?? "N/A")</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Items">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default">
+                                @context.Items.Count items
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Total Amount">
+                            <MudText Typo="Typo.body2" Style="color: #6c757d; text-decoration: line-through;">
+                                R @context.TotalAmount.ToString("N2")
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@(expandedCancelledOrderId == context.PurchaseOrderID ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                           OnClick="@(() => ToggleExpandCancelled(context.PurchaseOrderID))"
+                                           Color="Color.Default" />
+                        </MudTd>
+                    </RowTemplate>
+                    <ChildRowContent>
+                        @if (expandedCancelledOrderId == context.PurchaseOrderID)
+                        {
+                            <MudTr>
+                                <td colspan="7">
+                                    <MudCard Elevation="0" Class="ma-4">
+                                        <MudCardContent>
+                                            <MudGrid Spacing="3">
+                                                <!-- Cancellation Status Section -->
+                                                <MudItem xs="12" md="4">
+                                                    <MudPaper Elevation="2" Class="pa-4" Style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white;">
+                                                        <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                                            <MudIcon Icon="@Icons.Material.Filled.Cancel" 
+                                                                     Size="Size.Large" 
+                                                                     Style="font-size: 72px;" />
+                                                            <MudText Typo="Typo.h5" Align="Align.Center" Style="font-weight: 600;">
+                                                                Order Cancelled
+                                                            </MudText>
+                                                            <MudText Typo="Typo.body1" Align="Align.Center">
+                                                                This order was cancelled
+                                                            </MudText>
+                                                            <MudDivider DividerType="DividerType.Middle" Style="background-color: rgba(255,255,255,0.3);" />
+                                                            <MudText Typo="Typo.body2" Align="Align.Center">
+                                                                PO: <strong>@context.PONumber</strong>
+                                                            </MudText>
+                                                            <MudText Typo="Typo.caption" Align="Align.Center">
+                                                                Order Date: @context.OrderDate.ToShortDateString()
+                                                            </MudText>
+                                                        </MudStack>
+                                                    </MudPaper>
+                                                </MudItem>
+
+                                                <!-- Order Details Section -->
+                                                <MudItem xs="12" md="8">
+                                                    <MudPaper Elevation="2" Class="pa-4" Style="opacity: 0.8;">
+                                                        <MudStack Spacing="2">
+                                                            <MudText Typo="Typo.h6" Style="color: #6c757d;">
+                                                                <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Small" /> 
+                                                                Cancelled Order Details
+                                                            </MudText>
+                                                            
+                                                            <MudDivider />
+
+                                                            <MudGrid Spacing="2">
+                                                                <MudItem xs="6">
+                                                                    <MudText Typo="Typo.caption" Style="color: #CCC5B9;">Supplier</MudText>
+                                                                    <MudText Typo="Typo.body1" Style="font-weight: 600; color: #6c757d;">
+                                                                        @context.Supplier?.SupplierName
+                                                                    </MudText>
+                                                                    <MudText Typo="Typo.caption" Style="color: #CCC5B9;">
+                                                                        @context.Supplier?.Email
+                                                                    </MudText>
+                                                                </MudItem>
+                                                                <MudItem xs="6">
+                                                                    <MudText Typo="Typo.caption" Style="color: #CCC5B9;">Order Date</MudText>
+                                                                    <MudText Typo="Typo.body1" Style="font-weight: 600; color: #6c757d;">
+                                                                        @context.OrderDate.ToString("MMM dd, yyyy")
+                                                                    </MudText>
+                                                                </MudItem>
+                                                                <MudItem xs="6">
+                                                                    <MudText Typo="Typo.caption" Style="color: #CCC5B9;">Expected Delivery</MudText>
+                                                                    <MudText Typo="Typo.body1" Style="font-weight: 600; color: #6c757d; text-decoration: line-through;">
+                                                                        @(context.ExpectedDeliveryDate?.ToString("MMM dd, yyyy") ?? "N/A")
+                                                                    </MudText>
+                                                                </MudItem>
+                                                                <MudItem xs="6">
+                                                                    <MudText Typo="Typo.caption" Style="color: #CCC5B9;">Total Amount</MudText>
+                                                                    <MudText Typo="Typo.body1" Style="font-weight: 600; color: #6c757d; text-decoration: line-through;">
+                                                                        R @context.TotalAmount.ToString("N2")
+                                                                    </MudText>
+                                                                </MudItem>
+                                                            </MudGrid>
+                                                            
+                                                            <MudDivider Class="my-2" />
+                                                            
+                                                            <MudText Typo="Typo.subtitle2" Style="color: #6c757d; font-weight: 600;">
+                                                                Cancelled Items:
+                                                            </MudText>
+                                                            
+                                                            @foreach (var item in context.Items)
+                                                            {
+                                                                <MudPaper Elevation="0" Class="pa-2" Style="background-color: #f8f9fa; opacity: 0.7;">
+                                                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                                                        <div>
+                                                                            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #6c757d; text-decoration: line-through;">
+                                                                                @item.Product?.ProductName
+                                                                            </MudText>
+                                                                            <MudText Typo="Typo.caption" Style="color: #CCC5B9;">
+                                                                                @item.Product?.ProductCode
+                                                                            </MudText>
+                                                                        </div>
+                                                                        <MudChip T="string" Size="Size.Small" Color="Color.Default">
+                                                                            @item.OrderedQuantity @item.Product?.UnitOfMeasure
+                                                                        </MudChip>
+                                                                    </MudStack>
+                                                                </MudPaper>
+                                                            }
+
+                                                            @if (!string.IsNullOrEmpty(context.Notes))
+                                                            {
+                                                                <MudDivider Class="my-2" />
+                                                                <MudText Typo="Typo.subtitle2" Style="color: #6c757d; font-weight: 600;">
+                                                                    Notes:
+                                                                </MudText>
+                                                                <MudPaper Elevation="0" Class="pa-2" Style="background-color: #f8f9fa;">
+                                                                    <MudText Typo="Typo.body2" Style="color: #6c757d;">
+                                                                        @context.Notes
+                                                                    </MudText>
+                                                                </MudPaper>
+                                                            }
+                                                        </MudStack>
+                                                    </MudPaper>
+                                                </MudItem>
+
+                                                <!-- Action Buttons -->
+                                                <MudItem xs="12">
+                                                    <MudStack Row="true" Spacing="2" Justify="Justify.Center">
+                                                        <MudButton Variant="Variant.Outlined" 
+                                                                   Color="Color.Default"
+                                                                   StartIcon="@Icons.Material.Filled.Visibility"
+                                                                   OnClick="@(() => ViewDetails(context))">
+                                                            View Details
+                                                        </MudButton>
+                                                        
+                                                        <MudButton Variant="Variant.Outlined" 
+                                                                   Color="Color.Default"
+                                                                   StartIcon="@Icons.Material.Filled.Download"
+                                                                   OnClick="@(() => DownloadPdf(context))">
+                                                            Download PDF
+                                                        </MudButton>
+                                                        
+                                                        <MudButton Variant="Variant.Text" 
+                                                                   Color="Color.Default"
+                                                                   OnClick="@(() => ToggleExpandCancelled(context.PurchaseOrderID))">
+                                                            Close
+                                                        </MudButton>
+                                                    </MudStack>
+                                                </MudItem>
+                                            </MudGrid>
+                                        </MudCardContent>
+                                    </MudCard>
+                                </td>
+                            </MudTr>
+                        }
+                    </ChildRowContent>
+                </MudTable>
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudContainer>
+</AuthorizeView>
+
+@code {
+    private List<PurchaseOrder> allOrders = new();
+    private bool isLoading = true;
+    private int activeTab = 0;
+
+    // Expandable row tracking
+    private int? expandedOrderId = null;
+    private int? expandedSentOrderId = null;
+    private int? expandedConfirmedOrderId = null;
+    private int? expandedPendingOrderId = null;
+    private int? expandedCancelledOrderId = null;
+    private MudTable<PurchaseOrder>? deliveredTable;
+
+    // File upload tracking
+    private Dictionary<int, List<IBrowserFile>> uploadedFiles = new();
+    private const long MaxFileSize = 10 * 1024 * 1024; // 10MB
+
+    // Document tracking for confirmed orders
+    private Dictionary<int, List<PurchaseOrderDocument>> confirmedDocuments = new();
+    
+    // Document counts for confirmed orders
+    private Dictionary<int, int> documentCounts = new();
+
+    [Inject]
+    private HttpClient Http { get; set; } = null!;
+
+    private List<PurchaseOrder> pendingOrders => 
+        allOrders.Where(po => po.Status == "Pending").ToList();
+
+    private List<PurchaseOrder> sentOrders => 
+        allOrders.Where(po => po.Status == "Sent").ToList();
+
+    private List<PurchaseOrder> deliveredOrders => 
+        allOrders.Where(po => po.Status == "Delivered").ToList();
+
+    private List<PurchaseOrder> confirmedOrders => 
+        allOrders.Where(po => po.Status == "Confirmed").ToList();
+
+    private List<PurchaseOrder> cancelledOrders => 
+        allOrders.Where(po => po.Status == "Cancelled").ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrders();
+    }
+
+    private async Task LoadOrders()
+    {
+        isLoading = true;
+        allOrders = await PurchaseOrderService.GetAllPurchaseOrdersAsync();
+        
+        // Load document counts for confirmed orders
+        foreach (var po in allOrders.Where(p => p.Status == "Confirmed"))
+        {
+            var docs = await PurchaseOrderService.GetDocumentsAsync(po.PurchaseOrderID);
+            documentCounts[po.PurchaseOrderID] = docs.Count;
+        }
+        
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private List<PurchaseOrder> GetOrdersByStatus(string status)
+    {
+        return allOrders
+            .Where(o => o.Status == status)
+            .OrderByDescending(o => o.OrderDate)
+            .ToList();
+    }
+
+    private async Task ViewOrderDetails(PurchaseOrder order)
+    {
+        // Build items list with HTML for better formatting
+        var itemsHtml = string.Join("<br/>", order.Items.Select(i => 
+            $"<div style='color: #000000; padding: 4px 0;'>" +
+            $"<strong>{i.Product?.ProductName}</strong><br/>" +
+            $"<span style='font-size: 0.9em;'>{i.Product?.ProductCode}</span><br/>" +
+            $"<span>{i.OrderedQuantity} {i.Product?.UnitOfMeasure}</span>" +
+            $"</div>"));
+        
+        var content = new MarkupString(
+            $"<div style='color: #000000;'>" +
+            $"<p><strong>Supplier:</strong> {order.Supplier?.SupplierName}</p>" +
+            $"<p><strong>Order Date:</strong> {order.OrderDate:M/d/yyyy}</p>" +
+            $"<p><strong>Expected Delivery:</strong> {order.ExpectedDeliveryDate:M/d/yyyy}</p>" +
+            $"<br/>" +
+            $"<p><strong>ORDER ITEMS</strong></p>" +
+            $"<div style='margin-left: 10px;'>{itemsHtml}</div>" +
+            $"</div>");
+        
+        await DialogService.ShowMessageBox(
+            $"Order Details - {order.PONumber}",
+            content,
+            cancelText: "Close");
+    }
+
+    private async Task SendOrder(PurchaseOrder order)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "Send Purchase Order",
+            $"Send order {order.PONumber} to {order.Supplier?.SupplierName}?\n\n" +
+            $"This will change the status to 'Sent'.",
+            yesText: "Send", cancelText: "Cancel");
+
+        if (confirm == true)
+        {
+            order.Status = "Sent";
+            var success = await PurchaseOrderService.UpdatePurchaseOrderAsync(order);
+            
+            if (success)
+            {
+                Snackbar.Add($"Order {order.PONumber} sent successfully!", Severity.Success);
+                await LoadOrders();
+            }
+            else
+            {
+                Snackbar.Add("Failed to send order", Severity.Error);
+            }
+        }
+    }
+
+    private async Task ReceiveOrder(PurchaseOrder order)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "Receive Order",
+            $"Mark order {order.PONumber} as received?\n\n" +
+            $"This will add {order.Items.Sum(i => i.OrderedQuantity)} items to stock.",
+            yesText: "Receive", cancelText: "Cancel");
+
+        if (confirm == true)
+        {
+            // Prepare received items with full quantities
+            var receivedItems = order.Items.Select(item => new PurchaseOrderItem
+            {
+                POItemID = item.POItemID,
+                ProductID = item.ProductID,
+                OrderedQuantity = item.OrderedQuantity,
+                ReceivedQuantity = item.OrderedQuantity, // Receiving full amount
+                UnitCost = item.UnitCost
+            }).ToList();
+
+            // Call the RECEIVE endpoint (not update!)
+            var success = await PurchaseOrderService.ReceivePurchaseOrderAsync(order.PurchaseOrderID, receivedItems);
+            
+            if (success)
+            {
+                Snackbar.Add($"Order {order.PONumber} received! Stock levels updated.", Severity.Success);
+                await LoadOrders();
+            }
+            else
+            {
+                Snackbar.Add("Failed to receive order", Severity.Error);
+            }
+        }
+    }
+
+    private async Task CancelOrder(PurchaseOrder order)
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            "Cancel Order",
+            $"Are you sure you want to cancel PO {order.PONumber}? This action cannot be undone.",
+            yesText: "Yes, Cancel Order", 
+            cancelText: "No, Keep Order",
+            options: new DialogOptions { MaxWidth = MaxWidth.Small });
+
+        if (confirm == true)
+        {
+            var success = await PurchaseOrderService.UpdateStatusAsync(order.PurchaseOrderID, "Cancelled");
+
+            if (success)
+            {
+                Snackbar.Add($"PO {order.PONumber} cancelled successfully", Severity.Success);
+                await LoadOrders();
+                
+                // Close any expanded accordions
+                expandedPendingOrderId = null;
+                expandedSentOrderId = null;
+            }
+            else
+            {
+                Snackbar.Add("Failed to cancel order", Severity.Error);
+            }
+        }
+    }
+
+    private async Task SendToSupplier(PurchaseOrder po)
+    {
+        var parameters = new DialogParameters
+        {
+            { "PurchaseOrder", po },
+            { "OnConfirm", new Func<Task>(async () => await ConfirmSendToSupplier(po)) }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            CloseButton = false
+        };
+
+        await DialogService.ShowAsync<SendToSupplierDialog>("Send to Supplier", parameters, options);
+    }
+
+    private async Task ConfirmSendToSupplier(PurchaseOrder po)
+    {
+        var success = await PurchaseOrderService.SendToSupplierAsync(po.PurchaseOrderID);
+
+        if (success)
+        {
+            Snackbar.Add($"Purchase order sent to {po.Supplier?.SupplierName}", Severity.Success);
+            await LoadOrders();
+        }
+        else
+        {
+            Snackbar.Add("Failed to send purchase order", Severity.Error);
+        }
+    }
+
+    private async Task ViewDetails(PurchaseOrder po)
+    {
+        var parameters = new DialogParameters
+        {
+            { "PurchaseOrder", po }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true,
+            CloseButton = true
+        };
+
+        await DialogService.ShowAsync<PurchaseOrderDetailsDialog>("Order Details", parameters, options);
+    }
+
+    private async Task MarkAsDelivered(PurchaseOrder po)
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            "Mark as Delivered",
+            $"Mark PO {po.PONumber} as delivered by {po.Supplier?.SupplierName}?",
+            yesText: "Yes, Delivered", cancelText: "Cancel");
+
+        if (confirm == true)
+        {
+            var success = await PurchaseOrderService.UpdateStatusAsync(po.PurchaseOrderID, "Delivered");
+
+            if (success)
+            {
+                Snackbar.Add($"PO {po.PONumber} marked as delivered", Severity.Success);
+                await LoadOrders();
+            }
+            else
+            {
+                Snackbar.Add("Failed to update status", Severity.Error);
+            }
+        }
+    }
+
+    private Task UploadDocuments(PurchaseOrder po)
+    {
+        Snackbar.Add("Document upload coming in Phase 2!", Severity.Info);
+        return Task.CompletedTask;
+    }
+
+    private async Task DownloadPdf(PurchaseOrder po)
+    {
+        var pdfBytes = await PurchaseOrderService.DownloadPdfAsync(po.PurchaseOrderID);
+
+        if (pdfBytes != null)
+        {
+            // Trigger browser download
+            var fileName = $"PO-{po.PONumber}.pdf";
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(pdfBytes));
+            Snackbar.Add("PDF downloaded successfully", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Failed to download PDF", Severity.Error);
+        }
+    }
+
+    private void ToggleExpand(int orderId)
+    {
+        if (expandedOrderId == orderId)
+        {
+            expandedOrderId = null;
+        }
+        else
+        {
+            expandedOrderId = orderId;
+            
+            // Initialize file list for this order if not exists
+            if (!uploadedFiles.ContainsKey(orderId))
+            {
+                uploadedFiles[orderId] = new List<IBrowserFile>();
+            }
+        }
+    }
+
+    private void ToggleExpandSent(int orderId)
+    {
+        if (expandedSentOrderId == orderId)
+        {
+            expandedSentOrderId = null;
+        }
+        else
+        {
+            expandedSentOrderId = orderId;
+        }
+    }
+
+    private async Task ToggleExpandConfirmed(int orderId)
+    {
+        if (expandedConfirmedOrderId == orderId)
+        {
+            expandedConfirmedOrderId = null;
+        }
+        else
+        {
+            expandedConfirmedOrderId = orderId;
+            
+            // Load documents if not already loaded
+            if (!confirmedDocuments.ContainsKey(orderId))
+            {
+                var docs = await PurchaseOrderService.GetDocumentsAsync(orderId);
+                confirmedDocuments[orderId] = docs;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void ToggleExpandCancelled(int orderId)
+    {
+        if (expandedCancelledOrderId == orderId)
+        {
+            expandedCancelledOrderId = null;
+        }
+        else
+        {
+            expandedCancelledOrderId = orderId;
+        }
+    }
+
+    private void ToggleExpandPending(int orderId)
+    {
+        if (expandedPendingOrderId == orderId)
+        {
+            expandedPendingOrderId = null;
+        }
+        else
+        {
+            expandedPendingOrderId = orderId;
+        }
+    }
+
+    private async Task SendToSupplierFromExpanded(PurchaseOrder po)
+    {
+        await SendToSupplier(po);
+        expandedPendingOrderId = null; // Close accordion after action
+    }
+
+    private async Task CancelOrderFromExpanded(PurchaseOrder po)
+    {
+        var parameters = new DialogParameters
+        {
+            { "Message", $"Are you sure you want to cancel PO {po.PONumber}? This action cannot be undone." },
+            { "ConfirmText", "Yes, Cancel Order" },
+            { "CancelText", "Cancel" }
+        };
+
+        var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Cancel Purchase Order", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            var success = await PurchaseOrderService.UpdateStatusAsync(po.PurchaseOrderID, "Cancelled");
+
+            if (success)
+            {
+                Snackbar.Add($"PO {po.PONumber} has been cancelled", Severity.Success);
+                expandedPendingOrderId = null; // Close accordion
+                await LoadOrders();
+            }
+            else
+            {
+                Snackbar.Add("Failed to cancel order", Severity.Error);
+            }
+        }
+    }
+
+    private async Task MarkAsDeliveredFromExpanded(PurchaseOrder po)
+    {
+        var success = await PurchaseOrderService.UpdateStatusAsync(po.PurchaseOrderID, "Delivered");
+
+        if (success)
+        {
+            Snackbar.Add($"PO {po.PONumber} marked as delivered", Severity.Success);
+            expandedSentOrderId = null; // Close the expanded row
+            await LoadOrders();
+        }
+        else
+        {
+            Snackbar.Add("Failed to update status", Severity.Error);
+        }
+    }
+
+    private void TriggerFileInput(int orderId)
+    {
+        JSRuntime.InvokeVoidAsync("triggerFileInput", $"fileInput-{orderId}");
+    }
+
+    private async Task OnFilesSelected(InputFileChangeEventArgs e, int orderId)
+    {
+        // Initialize list if not exists
+        if (!uploadedFiles.ContainsKey(orderId))
+        {
+            uploadedFiles[orderId] = new List<IBrowserFile>();
+        }
+
+        var validFiles = new List<IBrowserFile>();
+        
+        foreach (var file in e.GetMultipleFiles(10)) // Max 10 files at once
+        {
+            // Validate file size
+            if (file.Size > MaxFileSize)
+            {
+                Snackbar.Add($"File {file.Name} exceeds 10MB limit", Severity.Warning);
+                continue;
+            }
+
+            // Validate file type
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            if (extension != ".jpg" && extension != ".jpeg" && extension != ".png" && extension != ".pdf")
+            {
+                Snackbar.Add($"File {file.Name} has invalid type. Only JPG, PNG, PDF allowed", Severity.Warning);
+                continue;
+            }
+
+            validFiles.Add(file);
+        }
+
+        if (validFiles.Any())
+        {
+            uploadedFiles[orderId].AddRange(validFiles);
+            Snackbar.Add($"{validFiles.Count} file(s) selected", Severity.Success);
+            StateHasChanged();
+        }
+    }
+
+    private async Task SelectFiles(PurchaseOrder po)
+    {
+        Snackbar.Add("File upload will be implemented in Phase 2!", Severity.Info);
+        // Phase 2: Actual file upload implementation
+    }
+
+    private void RemoveFile(int orderId, IBrowserFile file)
+    {
+        if (uploadedFiles.ContainsKey(orderId))
+        {
+            uploadedFiles[orderId].Remove(file);
+            Snackbar.Add($"Removed {file.Name}", Severity.Info);
+            StateHasChanged();
+        }
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private async Task ConfirmAndReceiveStock(PurchaseOrder po)
+    {
+        var hasFiles = uploadedFiles.ContainsKey(po.PurchaseOrderID) && uploadedFiles[po.PurchaseOrderID].Any();
+        
+        var fileCount = hasFiles ? uploadedFiles[po.PurchaseOrderID].Count : 0;
+        var message = hasFiles 
+            ? $"Confirm receipt and upload {fileCount} document(s)?"
+            : "Confirm receipt without documents?\n\nYou can upload documents later if needed.";
+        
+        var confirm = await DialogService.ShowMessageBox(
+            "Confirm & Receive Stock",
+            message,
+            yesText: "Confirm & Receive", cancelText: "Cancel");
+
+        if (confirm == true)
+        {
+            try
+            {
+                // Step 1: Upload files if any
+                if (hasFiles)
+                {
+                    Snackbar.Add($"Uploading {fileCount} document(s)...", Severity.Info);
+                    
+                    var uploadSuccess = await UploadDocuments(po.PurchaseOrderID, uploadedFiles[po.PurchaseOrderID]);
+                    
+                    if (!uploadSuccess)
+                    {
+                        Snackbar.Add("Failed to upload documents", Severity.Error);
+                        return;
+                    }
+                    
+                    Snackbar.Add($"{fileCount} document(s) uploaded successfully", Severity.Success);
+                    
+                    // Update document count
+                    documentCounts[po.PurchaseOrderID] = fileCount;
+                }
+                else
+                {
+                    // No documents uploaded
+                    documentCounts[po.PurchaseOrderID] = 0;
+                }
+                
+                // Step 2: Receive stock (existing functionality)
+                await ReceiveOrder(po);
+                
+                // Step 3: Cleanup
+                if (uploadedFiles.ContainsKey(po.PurchaseOrderID))
+                {
+                    uploadedFiles.Remove(po.PurchaseOrderID);
+                }
+                expandedOrderId = null;
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task<bool> UploadDocuments(int purchaseOrderId, List<IBrowserFile> files)
+    {
+        try
+        {
+            using var content = new MultipartFormDataContent();
+
+            foreach (var file in files)
+            {
+                var fileContent = new StreamContent(file.OpenReadStream(MaxFileSize));
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+                content.Add(fileContent, "files", file.Name);
+            }
+
+            var response = await Http.PostAsync($"http://localhost:5041/api/documents/upload/{purchaseOrderId}", content);
+            
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Upload error: {ex.Message}");
+            return false;
+        }
+    }
+
+    private string GetFileIcon(string fileType)
+    {
+        if (fileType.Contains("pdf"))
+            return Icons.Material.Filled.PictureAsPdf;
+        if (fileType.Contains("image"))
+            return Icons.Material.Filled.Image;
+        return Icons.Material.Filled.InsertDriveFile;
+    }
+
+    private async Task DownloadDocument(int documentId, string fileName)
+    {
+        try
+        {
+            var response = await Http.GetAsync($"http://localhost:5041/api/documents/download/{documentId}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var fileBytes = await response.Content.ReadAsByteArrayAsync();
+                await JSRuntime.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(fileBytes));
+                Snackbar.Add($"Downloaded {fileName}", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to download document", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}
+
+

@@ -1,0 +1,230 @@
+@page "/suppliers"
+@using Stockit.Models
+@using Stockit.Components
+@inject ISupplierService SupplierService
+@inject IPurchaseOrderService PurchaseOrderService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IAuthorizationService AuthorizationService
+
+<AuthorizeView RequirePermission="@(() => AuthorizationService.CanAccessSuppliersAsync())">
+    <PageTitle>Suppliers - Stockit</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Class="mr-2" />
+        Suppliers
+    </MudText>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudAutocomplete T="Supplier"
+                             Label="Search suppliers..." 
+                             @bind-Value="selectedSupplier"
+                             SearchFunc="SearchSuppliers"
+                             ToStringFunc="@(s => s?.SupplierName ?? "")"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="false"
+                             CoerceValue="false"
+                             AdornmentIcon="@Icons.Material.Filled.Search"
+                             AdornmentColor="Color.Primary"
+                             Variant="Variant.Outlined"
+                             Clearable="true"
+                             Style="max-width: 400px;">
+                <ItemTemplate Context="supplier">
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.body1"><strong>@supplier.SupplierName</strong></MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            @supplier.ContactPerson · @supplier.Email · @supplier.Phone
+                        </MudText>
+                    </MudStack>
+                </ItemTemplate>
+            </MudAutocomplete>
+            
+            <MudButton Variant="Variant.Filled" 
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenCreateDialog">
+                Add Supplier
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+
+    @if (isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else
+    {
+        <MudTable Items="@FilteredSuppliers()" Hover="true" Striped="true" Dense="true">
+            <HeaderContent>
+                <MudTh>Supplier Name</MudTh>
+                <MudTh>Contact Person</MudTh>
+                <MudTh>Email</MudTh>
+                <MudTh>Phone</MudTh>
+                <MudTh>Lead Time (Days)</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Name">
+                    <MudText Typo="Typo.body1"><strong>@context.SupplierName</strong></MudText>
+                </MudTd>
+                <MudTd DataLabel="Contact">@context.ContactPerson</MudTd>
+                <MudTd DataLabel="Email">@context.Email</MudTd>
+                <MudTd DataLabel="Phone">@context.Phone</MudTd>
+                <MudTd DataLabel="Lead Time">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.LeadTimeDays days</MudChip>
+                </MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                        <MudButton StartIcon="@Icons.Material.Filled.ShoppingCart"
+                                   Color="Color.Success"
+                                   OnClick="@(() => OpenCreateOrderDialog(context))">
+                            Create Order
+                        </MudButton>
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                       Color="Color.Primary"
+                                       OnClick="@(() => OpenEditDialog(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                       Color="Color.Error"
+                                       OnClick="@(() => DeleteSupplier(context))" />
+                    </MudButtonGroup>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudContainer>
+</AuthorizeView>
+
+@code {
+    private List<Supplier> suppliers = new();
+    private Supplier? selectedSupplier = null;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSuppliers();
+    }
+
+    private async Task LoadSuppliers()
+    {
+        isLoading = true;
+        suppliers = await SupplierService.GetAllSuppliersAsync();
+        isLoading = false;
+    }
+
+    private Task<IEnumerable<Supplier>> SearchSuppliers(string value, CancellationToken token)
+    {
+        // Show all suppliers if search is empty
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult(suppliers.AsEnumerable());
+
+        // Search across multiple fields
+        var results = suppliers
+            .Where(s => s.SupplierName.Contains(value, StringComparison.OrdinalIgnoreCase) ||
+                       (s.ContactPerson?.Contains(value, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                       (s.Email?.Contains(value, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                       (s.Phone?.Contains(value, StringComparison.OrdinalIgnoreCase) ?? false))
+            .AsEnumerable();
+
+        return Task.FromResult(results);
+    }
+
+    private IEnumerable<Supplier> FilteredSuppliers()
+    {
+        // If a supplier is selected in the search, filter to show only that one
+        if (selectedSupplier != null)
+            return new[] { selectedSupplier };
+
+        // Otherwise show all
+        return suppliers;
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            ["Supplier"] = new Supplier(),
+            ["IsEdit"] = false
+        };
+
+        var options = new DialogOptions 
+        { 
+            CloseOnEscapeKey = true,
+            CloseButton = true
+        };
+        
+        var dialog = await DialogService.ShowAsync<SupplierDialog>("Add Supplier", parameters, options);
+        var result = await dialog.Result;
+
+        // Reload regardless of cancel or success for now (debugging)
+        await LoadSuppliers();
+    }
+
+    private async Task OpenEditDialog(Supplier supplier)
+    {
+        var parameters = new DialogParameters
+        {
+            ["Supplier"] = supplier,
+            ["IsEdit"] = true
+        };
+
+        var options = new DialogOptions 
+        { 
+            CloseOnEscapeKey = true,
+            CloseButton = true
+        };
+        
+        var dialog = await DialogService.ShowAsync<SupplierDialog>("Edit Supplier", parameters, options);
+        var result = await dialog.Result;
+
+        // Reload regardless of cancel or success for now (debugging)
+        await LoadSuppliers();
+    }
+
+    private async Task OpenCreateOrderDialog(Supplier supplier)
+    {
+        var parameters = new DialogParameters
+        {
+            ["Supplier"] = supplier
+        };
+
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true,
+            CloseOnEscapeKey = true,
+            CloseButton = true
+        };
+        
+        var dialog = await DialogService.ShowAsync<CreatePurchaseOrderDialog>("Create Purchase Order", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            Snackbar.Add("Purchase order created successfully!", Severity.Success);
+        }
+    }
+
+    private async Task DeleteSupplier(Supplier supplier)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "Delete Supplier",
+            $"Are you sure you want to delete '{supplier.SupplierName}'?",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (confirm == true)
+        {
+            var success = await SupplierService.DeleteSupplierAsync(supplier.SupplierID);
+            if (success)
+            {
+                Snackbar.Add($"Supplier '{supplier.SupplierName}' deleted successfully!", Severity.Success);
+                await LoadSuppliers();
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete supplier", Severity.Error);
+            }
+        }
+    }
+}

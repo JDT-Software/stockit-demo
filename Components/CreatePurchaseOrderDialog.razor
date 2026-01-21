@@ -1,0 +1,334 @@
+@using MudBlazor
+@using Stockit.Models
+@inject IProductService ProductService
+@inject IPurchaseOrderService PurchaseOrderService
+@inject ISnackbar Snackbar
+
+<MudDialog CloseButton="true">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Class="mr-2" />
+            Create Purchase Order for @Supplier?.SupplierName
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Expected Delivery: @ExpectedDeliveryDate.ToString("MMM dd, yyyy")
+                </MudText>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField @bind-Value="notes"
+                              Label="Order Notes"
+                              Lines="2"
+                              Placeholder="Special instructions or notes..." />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudDivider />
+                <MudText Typo="Typo.h6" Class="mt-4 mb-2">Add Products</MudText>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField @bind-Value="searchText"
+                              Label="Search Products"
+                              Placeholder="Search by product code or name..."
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true"
+                              Class="mb-3" />
+            </MudItem>
+
+            <MudItem xs="12" Style="max-height: 500px; overflow-y: auto;">
+                @if (isLoadingProducts)
+                {
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                }
+                else if (!GetFilteredProductsByCategory().Any())
+                {
+                    <MudAlert Severity="Severity.Info">No products found. Try a different search term.</MudAlert>
+                }
+                else
+                {
+                    <MudExpansionPanels MultiExpansion="true">
+                        @foreach (var categoryGroup in GetFilteredProductsByCategory())
+                        {
+                            <MudExpansionPanel>
+                                <TitleContent>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width: 100%;">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                            <MudIcon Icon="@Icons.Material.Filled.Category" />
+                                            <MudText Typo="Typo.subtitle1"><strong>@categoryGroup.Key</strong></MudText>
+                                        </MudStack>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                                            @categoryGroup.Count() products
+                                        </MudChip>
+                                    </MudStack>
+                                </TitleContent>
+                                <ChildContent>
+                                    <div>
+                                        @foreach (var product in categoryGroup)
+                                        {
+
+                                                <MudPaper Class="pa-3 mb-2" Elevation="1">
+                                                    <MudGrid>
+                                                        <MudItem xs="12" md="5">
+                                                            <MudStack Spacing="1">
+                                                                <MudText Typo="Typo.body1">
+                                                                    <strong>@product.ProductCode</strong>
+                                                                </MudText>
+                                                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                                    @product.ProductName
+                                                                </MudText>
+                                                                <MudChip T="string" 
+                                                                         Size="Size.Small" 
+                                                                         Color="@GetStockColor(product)"
+                                                                         Icon="@Icons.Material.Filled.Inventory">
+                                                                    Stock: @(product.StockLevel?.CurrentQuantity ?? 0) @product.UnitOfMeasure
+                                                                </MudChip>
+                                                            </MudStack>
+                                                        </MudItem>
+                                                        <MudItem xs="12" md="5">
+                                                            <MudNumericField @bind-Value="@productQuantities[product.ProductID]"
+                                                                             Label="Quantity to Order"
+                                                                             Min="0"
+                                                                             Variant="Variant.Outlined"
+                                                                             Adornment="Adornment.End"
+                                                                             AdornmentText="@product.UnitOfMeasure"
+                                                                             Immediate="true"
+                                                                             Disabled="@IsProductInOrder(product.ProductID)" />
+                                                        </MudItem>
+                                                        <MudItem xs="12" md="2" Class="d-flex align-center justify-center">
+                                                            @if (IsProductInOrder(product.ProductID))
+                                                            {
+                                                                <MudChip T="string" 
+                                                                         Color="Color.Success" 
+                                                                         Icon="@Icons.Material.Filled.CheckCircle"
+                                                                         Size="Size.Small">
+                                                                    Added
+                                                                </MudChip>
+                                                            }
+                                                            else
+                                                            {
+                                                                <MudButton Variant="Variant.Filled"
+                                                                           Color="Color.Primary"
+                                                                           Size="Size.Small"
+                                                                           StartIcon="@Icons.Material.Filled.Add"
+                                                                           OnClick="@(() => AddProductToOrder(product))"
+                                                                           Disabled="@(productQuantities[product.ProductID] <= 0)"
+                                                                           FullWidth="true">
+                                                                    Add
+                                                                </MudButton>
+                                                            }
+                                                        </MudItem>
+                                                    </MudGrid>
+                                                </MudPaper>
+
+                                        }
+                                    </div>
+                                </ChildContent>
+                            </MudExpansionPanel>
+                        }
+                    </MudExpansionPanels>
+                }
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.h6" Class="mb-2">Order Summary</MudText>
+            </MudItem>
+
+            @if (orderItems.Any())
+            {
+                <MudItem xs="12">
+                    <MudTable Items="@orderItems" Dense="true" Hover="true">
+                        <HeaderContent>
+                            <MudTh>Product Code</MudTh>
+                            <MudTh>Product Name</MudTh>
+                            <MudTh>Current Stock</MudTh>
+                            <MudTh>Quantity to Order</MudTh>
+                            <MudTh></MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Code">@context.Product?.ProductCode</MudTd>
+                            <MudTd DataLabel="Product">@context.Product?.ProductName</MudTd>
+                            <MudTd DataLabel="Current">
+                                <MudChip T="string" Size="Size.Small" Color="@GetStockColor(context.Product)">
+                                    @(context.Product?.StockLevel?.CurrentQuantity ?? 0)
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Quantity">@context.OrderedQuantity @context.Product?.UnitOfMeasure</MudTd>
+                            <MudTd>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Size="Size.Small"
+                                               Color="Color.Error"
+                                               OnClick="@(() => RemoveProduct(context))" />
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+
+                    <MudPaper Class="pa-4 mt-2">
+                        <MudText Typo="Typo.h6">
+                            Total Items: @orderItems.Count | Total Quantity: @orderItems.Sum(i => i.OrderedQuantity)
+                        </MudText>
+                    </MudPaper>
+                </MudItem>
+            }
+            else
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info">No products added yet. Add products from the categories above.</MudAlert>
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="CreateOrder"
+                   Disabled="@(!orderItems.Any() || isCreating)">
+            @if (isCreating)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            }
+            else
+            {
+                <span>Create Order</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] 
+    MudBlazor.IDialogReference MudDialog { get; set; } = null!;
+    [Parameter] public Supplier? Supplier { get; set; }
+
+    private List<Product> allProducts = new();
+    private List<PurchaseOrderItem> orderItems = new();
+    private Dictionary<int, int> productQuantities = new();
+    private string searchText = "";
+    private string notes = "";
+    private bool isCreating = false;
+    private bool isLoadingProducts = false;
+
+    private DateTime ExpectedDeliveryDate => DateTime.Now.AddDays(Supplier?.LeadTimeDays ?? 7);
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoadingProducts = true;
+        allProducts = await ProductService.GetAllProductsAsync();
+        
+        // Initialize product quantities
+        foreach (var product in allProducts)
+        {
+            productQuantities[product.ProductID] = 0;
+        }
+        
+        isLoadingProducts = false;
+    }
+
+    private IEnumerable<IGrouping<string, Product>> GetFilteredProductsByCategory()
+    {
+        var filteredProducts = string.IsNullOrEmpty(searchText)
+            ? allProducts
+            : allProducts.Where(p => p.ProductName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                                    p.ProductCode.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+
+        return filteredProducts
+            .Where(p => p.IsActive)
+            .GroupBy(p => p.Category?.CategoryName ?? "Other")
+            .OrderBy(g => g.Key);
+    }
+
+    private bool IsProductInOrder(int productId)
+    {
+        return orderItems.Any(i => i.ProductID == productId);
+    }
+
+    private void AddProductToOrder(Product product)
+    {
+        var quantity = productQuantities[product.ProductID];
+        
+        if (quantity <= 0)
+        {
+            Snackbar.Add("Please enter a valid quantity", Severity.Warning);
+            return;
+        }
+
+        // Check if product already added
+        if (IsProductInOrder(product.ProductID))
+        {
+            Snackbar.Add("Product already added to order", Severity.Warning);
+            return;
+        }
+
+        orderItems.Add(new PurchaseOrderItem
+        {
+            ProductID = product.ProductID,
+            Product = product,
+            OrderedQuantity = quantity,
+            UnitCost = 0
+        });
+
+        Snackbar.Add($"Added {product.ProductName} to order", Severity.Success);
+    }
+
+    private MudBlazor.Color GetStockColor(Product? product)
+    {
+        if (product == null) return MudBlazor.Color.Default;
+        
+        var currentStock = product.StockLevel?.CurrentQuantity ?? 0;
+        if (currentStock < product.ReorderPoint)
+            return MudBlazor.Color.Error;
+        if (currentStock < product.ReorderPoint * 1.5)
+            return MudBlazor.Color.Warning;
+        return MudBlazor.Color.Success;
+    }
+
+
+
+    private void RemoveProduct(PurchaseOrderItem item)
+    {
+        orderItems.Remove(item);
+    }
+
+    private async Task CreateOrder()
+    {
+        if (!orderItems.Any())
+        {
+            Snackbar.Add("Please add at least one product", Severity.Warning);
+            return;
+        }
+
+        isCreating = true;
+
+        var purchaseOrder = new PurchaseOrder
+        {
+            SupplierID = Supplier!.SupplierID,
+            OrderDate = DateTime.Now,
+            ExpectedDeliveryDate = ExpectedDeliveryDate,
+            Status = "Pending",
+            Notes = notes,
+            Items = orderItems,
+            TotalAmount = 0,
+            CreatedBy = 1
+        };
+
+        var success = await PurchaseOrderService.CreatePurchaseOrderAsync(purchaseOrder);
+
+        isCreating = false;
+
+        if (success)
+        {
+            Snackbar.Add($"Purchase Order created successfully!", Severity.Success);
+            MudDialog?.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            Snackbar.Add("Failed to create purchase order", Severity.Error);
+        }
+    }
+}

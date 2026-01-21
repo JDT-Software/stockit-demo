@@ -1,0 +1,55 @@
+@using Stockit.Services
+@inject IAuthorizationService AuthorizationService
+@inject NavigationManager NavigationManager
+
+@if (isAuthorized)
+{
+    @ChildContent
+}
+else if (isLoading)
+{
+    <MudProgressCircular Color="MudBlazor.Color.Primary" Indeterminate="true" />
+    <MudText>Checking permissions...</MudText>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+        <MudAlert Severity="Severity.Error">
+            <MudText Typo="Typo.h6">Access Denied</MudText>
+            <MudText>You don't have permission to access this page.</MudText>
+            <MudButton Variant="Variant.Text" Color="MudBlazor.Color.Primary" OnClick="GoBack" Class="mt-2">
+                Go to Stock Entry
+            </MudButton>
+        </MudAlert>
+    </MudContainer>
+}
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public Func<Task<bool>>? RequirePermission { get; set; }
+
+    private bool isLoading = true;
+    private bool isAuthorized = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (RequirePermission != null)
+        {
+            isAuthorized = await RequirePermission();
+        }
+        else
+        {
+            isAuthorized = true;
+        }
+
+        isLoading = false;
+    }
+
+    private void GoBack()
+    {
+        NavigationManager.NavigateTo("/stock-entry");
+    }
+}

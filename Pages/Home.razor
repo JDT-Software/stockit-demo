@@ -1,0 +1,869 @@
+﻿@page "/"
+@using ApexCharts
+@using Stockit.Components
+@using Stockit.Models
+@using Microsoft.AspNetCore.WebUtilities
+@inject IProductService ProductService
+@inject IPurchaseOrderService PurchaseOrderService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject IAuthorizationService AuthorizationService
+
+<AuthorizeView RequirePermission="@(() => AuthorizationService.CanAccessDashboardAsync())">
+    <PageTitle>Dashboard - Stockit</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.Dashboard" Class="mr-2" />
+        Dashboard
+    </MudText>
+
+    @if (isLoading)
+    {
+        <MudProgressCircular Color="MudBlazor.Color.Primary" Indeterminate="true" />
+        <MudText>Loading dashboard...</MudText>
+    }
+    else
+    {
+        <!-- Date Range Filter -->
+        <MudGrid Class="mb-4">
+            <MudItem xs="12">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4">
+                        <MudIcon Icon="@Icons.Material.Filled.DateRange" Color="MudBlazor.Color.Primary" />
+                        <MudDatePicker Label="Start Date" 
+                                       @bind-Date="startDate"
+                                       MaxDate="DateTime.Today" />
+                        <MudDatePicker Label="End Date" 
+                                       @bind-Date="endDate"
+                                       MaxDate="DateTime.Today" />
+                        <MudButton Variant="Variant.Filled" 
+                                   Color="MudBlazor.Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Refresh"
+                                   OnClick="LoadDashboardData">
+                            Refresh
+                        </MudButton>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Daily Stock Movement with Zoom -->
+        <MudGrid Class="mb-4">
+            <MudItem xs="12">
+                <MudCard Elevation="2" Style="background-color: #EAE2B7; min-height: 500px;">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6" Style="color: #000000;">Daily Stock Movement Analysis</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent Style="min-height: 400px;">
+                        @if (dailyMovementData != null && dailyMovementData.Any())
+                        {
+                            <ApexChart TItem="DailyMovementData"
+                                       Title="Stock Movements by Day"
+                                       Height="400"
+                                       Options="movementChartOptions">
+                                <ApexPointSeries TItem="DailyMovementData"
+                                                 Items="dailyMovementData"
+                                                 Name="Purchases"
+                                                 SeriesType="SeriesType.Line"
+                                                 XValue="@(e => e.Date)"
+                                                 YAggregate="@(e => e.Sum(v => (decimal)v.Purchases))" />
+                                <ApexPointSeries TItem="DailyMovementData"
+                                                 Items="dailyMovementData"
+                                                 Name="Adjustments"
+                                                 SeriesType="SeriesType.Line"
+                                                 XValue="@(e => e.Date)"
+                                                 YAggregate="@(e => e.Sum(v => (decimal)v.Adjustments))" />
+                                <ApexPointSeries TItem="DailyMovementData"
+                                                 Items="dailyMovementData"
+                                                 Name="Damaged"
+                                                 SeriesType="SeriesType.Line"
+                                                 XValue="@(e => e.Date)"
+                                                 YAggregate="@(e => e.Sum(v => (decimal)v.Damaged))" />
+                                <ApexPointSeries TItem="DailyMovementData"
+                                                 Items="dailyMovementData"
+                                                 Name="Returns"
+                                                 SeriesType="SeriesType.Line"
+                                                 XValue="@(e => e.Date)"
+                                                 YAggregate="@(e => e.Sum(v => (decimal)v.Returns))" />
+                            </ApexChart>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Info">No stock movement data available for the selected date range</MudAlert>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Stock Value & Month Comparison -->
+        <MudGrid Class="mb-4">
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2" Style="background-color: #EAE2B7; min-height: 450px;">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6" Style="color: #000000;">Stock Value by Category</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent Style="min-height: 350px;">
+                        @if (stockValueData != null && stockValueData.Any())
+                        {
+                            <ApexChart TItem="StockValueData"
+                                       Title="Inventory Value Distribution"
+                                       Options="stockValueChartOptions">
+                                <ApexPointSeries TItem="StockValueData"
+                                                 Items="stockValueData"
+                                                 Name="Stock Value"
+                                                 SeriesType="SeriesType.Donut"
+                                                 XValue="@(e => e.CategoryName)"
+                                                 YAggregate="@(e => e.Sum(v => v.Value))"
+                                                 OrderByDescending="e => e.Y" />
+                            </ApexChart>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Info">No stock value data available</MudAlert>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2" Style="background-color: #EAE2B7; min-height: 450px;">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6" Style="color: #000000;">Month-over-Month Comparison</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent Style="min-height: 350px;">
+                        @if (monthComparisonData != null && monthComparisonData.Any())
+                        {
+                            <ApexChart TItem="MonthComparisonData"
+                                       Title="Current vs Previous Month"
+                                       Options="monthComparisonChartOptions">
+                                <ApexPointSeries TItem="MonthComparisonData"
+                                                 Items="monthComparisonData"
+                                                 Name="Current Month"
+                                                 SeriesType="SeriesType.Bar"
+                                                 XValue="@(e => e.Metric)"
+                                                 YAggregate="@(e => e.Sum(v => v.CurrentValue))" />
+                                <ApexPointSeries TItem="MonthComparisonData"
+                                                 Items="monthComparisonData"
+                                                 Name="Previous Month"
+                                                 SeriesType="SeriesType.Bar"
+                                                 XValue="@(e => e.Metric)"
+                                                 YAggregate="@(e => e.Sum(v => v.PreviousValue))" />
+                            </ApexChart>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Info">No comparison data available</MudAlert>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Most Used Stock Types -->
+        <MudGrid Class="mb-4">
+            <MudItem xs="12">
+                <MudCard Elevation="2" Style="background-color: #EAE2B7; min-height: 500px;">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6" Style="color: #000000;">Stock by Category</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent Style="min-height: 400px;">
+                        @if (mostUsedData != null && mostUsedData.Any())
+                        {
+                            <ApexChart TItem="MostUsedData"
+                                       Title="Units by Stock Type"
+                                       Height="400"
+                                       Options="stockTypeChartOptions">
+                                <ApexPointSeries TItem="MostUsedData"
+                                                 Items="mostUsedData"
+                                                 Name="Units"
+                                                 SeriesType="SeriesType.Bar"
+                                                 XValue="@(e => e.StockType)"
+                                                 YAggregate="@(e => e.Sum(v => (decimal)v.UnitsUsed))"
+                                                 OrderBy="e => e.X" />
+                            </ApexChart>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Info">No stock movement data available</MudAlert>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Charts Row 1 -->
+        <MudGrid Class="mb-4">
+            
+        </MudGrid>
+
+        <!-- Low Stock Table -->
+        <MudGrid Class="mb-4">
+            <MudItem xs="12">
+                <MudCard Elevation="2" Style="background-color: #EAE2B7;">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6" Style="color: #000000;">
+                                <MudIcon Icon="@Icons.Material.Filled.Warning" Color="MudBlazor.Color.Error" Class="mr-2" />
+                                Products Below Reorder Point
+                            </MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (lowStockProducts.Any())
+                        {
+                            <MudTable Items="@lowStockProducts" 
+                                      Hover="true" 
+                                      Breakpoint="Breakpoint.Sm" 
+                                      Dense="true"
+                                      @bind-SelectedItem="selectedLowStockProduct"
+                                      RowsPerPage="8">
+                                <HeaderContent>
+                                    <MudTh>Product Code</MudTh>
+                                    <MudTh>Product Name</MudTh>
+                                    <MudTh>Current Stock</MudTh>
+                                    <MudTh>Reorder Point</MudTh>
+                                    <MudTh>Gap</MudTh>
+                                    <MudTh>Action</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="Code">@context.ProductCode</MudTd>
+                                    <MudTd DataLabel="Name">@context.ProductName</MudTd>
+                                    <MudTd DataLabel="Current Stock" Style="text-align: center;">
+                                        @if (context.StockLevel != null)
+                                        {
+                                            var currentQty = context.StockLevel.CurrentQuantity;
+                                            var bgColor = currentQty == 0 ? "#dc3545" : "#ffc107";
+                                            
+                                            <span style="background-color: @bgColor; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; display: inline-block; min-width: 40px;">
+                                                @currentQty
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span style="background-color: #dc3545; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; display: inline-block; min-width: 40px;">
+                                                0
+                                            </span>
+                                        }
+                                    </MudTd>
+                                    <MudTd DataLabel="Reorder">@context.ReorderPoint</MudTd>
+                                    <MudTd DataLabel="Gap">
+                                        <MudChip T="string" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Error">
+                                            -@(context.ReorderPoint - (context.StockLevel?.CurrentQuantity ?? 0))
+                                        </MudChip>
+                                    </MudTd>
+                                    <MudTd>
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="MudBlazor.Color.Primary"
+                                                   Size="MudBlazor.Size.Small"
+                                                   StartIcon="@Icons.Material.Filled.ShoppingCart"
+                                                   OnClick="@(() => QuickOrder(context))">
+                                            ORDER NOW
+                                        </MudButton>
+                                    </MudTd>
+                                </RowTemplate>
+                                <PagerContent>
+                                    <MudTablePager PageSizeOptions="new int[] { 8, 16, 25, 50 }" />
+                                </PagerContent>
+                            </MudTable>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Success">All products are above reorder point! </MudAlert>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Stock Movement Trend -->
+        
+    }
+</MudContainer>
+</AuthorizeView>
+
+@code {
+    private bool isLoading = true;
+    private List<Product> products = new();
+    private List<Product> lowStockProducts = new();
+    private Product? selectedLowStockProduct;
+    private List<Category> categories = new();
+    private int totalProducts = 0;
+    private int lowStockCount = 0;
+    private int activeProductsPercentage = 0;
+    
+    // Date range filter
+    private DateTime? startDate = DateTime.Today.AddDays(-30);
+    private DateTime? endDate = DateTime.Today;
+    
+    // KPI Variables
+    private decimal totalRevenue = 0;
+    private decimal totalCost = 0;
+    private decimal profit = 0;
+    private decimal profitMargin = 0;
+    private decimal totalStockValue = 0;
+    private decimal revenueChange = 0;
+    private decimal costChange = 0;
+    
+    // Analytics data
+    private StockDistribution? stockDistribution;
+    private List<TrendData> trendData = new();
+    private List<CategoryData> categoryData = new();
+    private List<RevenueData> revenueData = new();
+    private List<StockValueData> stockValueData = new();
+    private List<MonthComparisonData> monthComparisonData = new();
+    private List<MostUsedData> mostUsedData = new();
+    private List<DailyMovementData> dailyMovementData = new();
+
+    // Chart options for sharp line edges (stock chart style)
+    private ApexChartOptions<DailyMovementData> movementChartOptions = new()
+    {
+        Stroke = new Stroke
+        {
+            Curve = Curve.Straight,
+            Width = 2
+        },
+        Chart = new Chart
+        {
+            Zoom = new Zoom
+            {
+                Enabled = true
+            },
+            Background = "#EAE2B7"
+        },
+        Colors = new List<string>
+        {
+            "#DC2F02", // Red for Purchases
+            "#E85D04", // Orange for Adjustments
+            "#FAA307", // Golden orange for Damaged
+            "#03071E"  // Dark navy for Returns
+        },
+        Theme = new Theme
+        {
+            Mode = Mode.Light
+        },
+        Yaxis = new List<YAxis>
+        {
+            new YAxis
+            {
+                Labels = new YAxisLabels
+                {
+                    Style = new AxisLabelStyle
+                    {
+                        Colors = new List<string> { "#000000" }
+                    }
+                }
+            }
+        },
+        Xaxis = new XAxis
+        {
+            Labels = new XAxisLabels
+            {
+                Style = new AxisLabelStyle
+                {
+                    Colors = new List<string> { "#000000" }
+                }
+            }
+        },
+        Legend = new Legend
+        {
+            Labels = new LegendLabels
+            {
+                Colors = new List<string> { "#000000" }
+            }
+        }
+    };
+
+    // Chart options for stock value donut chart
+    private ApexChartOptions<StockValueData> stockValueChartOptions = new()
+    {
+        Chart = new Chart
+        {
+            Background = "#EAE2B7"
+        },
+        Colors = new List<string>
+        {
+            "#03071E", // Dark navy
+            "#DC2F02", // Red
+            "#370617", // Dark burgundy
+            "#E85D04", // Orange
+            "#6A040F", // Dark red
+            "#F48C06", // Light orange
+            "#9D0208", // Crimson
+            "#FAA307", // Golden orange
+            "#D00000", // Bright red
+            "#FFBA08"  // Yellow
+        },
+        Theme = new Theme
+        {
+            Mode = Mode.Light
+        },
+        Legend = new Legend
+        {
+            Labels = new LegendLabels
+            {
+                Colors = new List<string> { "#000000" }
+            }
+        },
+        PlotOptions = new PlotOptions
+        {
+            Pie = new PlotOptionsPie
+            {
+                Donut = new PlotOptionsDonut
+                {
+                    Labels = new DonutLabels
+                    {
+                        Total = new DonutLabelTotal
+                        {
+                            Color = "#000000"
+                        },
+                        Value = new DonutLabelValue
+                        {
+                            Color = "#000000"
+                        },
+                        Name = new DonutLabelName
+                        {
+                            Color = "#000000"
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    // Chart options for stock types with gradient colors
+    private ApexChartOptions<MostUsedData> stockTypeChartOptions = new()
+    {
+        Chart = new Chart
+        {
+            Toolbar = new Toolbar
+            {
+                Show = true
+            },
+            Background = "#EAE2B7"
+        },
+        PlotOptions = new PlotOptions
+        {
+            Bar = new PlotOptionsBar
+            {
+                Distributed = true,
+                ColumnWidth = "60%"
+            }
+        },
+        Colors = new List<string>
+        {
+            "#03071E", // Dark navy
+            "#DC2F02", // Red
+            "#370617", // Dark burgundy
+            "#E85D04", // Orange
+            "#6A040F", // Dark red
+            "#F48C06", // Light orange
+            "#9D0208", // Crimson
+            "#FAA307", // Golden orange
+            "#D00000", // Bright red
+            "#FFBA08"  // Yellow
+        },
+        Legend = new Legend
+        {
+            Show = false
+        }
+    };
+
+    // Chart options for month-over-month comparison
+    private ApexChartOptions<MonthComparisonData> monthComparisonChartOptions = new()
+    {
+        Chart = new Chart
+        {
+            Background = "#EAE2B7"
+        },
+        Colors = new List<string>
+        {
+            "#DC2F02", // Red for Current Month
+            "#E85D04"  // Orange for Previous Month
+        },
+        Theme = new Theme
+        {
+            Mode = Mode.Light
+        },
+        Legend = new Legend
+        {
+            Labels = new LegendLabels
+            {
+                Colors = new List<string> { "#000000" }
+            }
+        },
+        Xaxis = new XAxis
+        {
+            Labels = new XAxisLabels
+            {
+                Style = new AxisLabelStyle
+                {
+                    Colors = new List<string> { "#000000" }
+                }
+            }
+        },
+        Yaxis = new List<YAxis>
+        {
+            new YAxis
+            {
+                Labels = new YAxisLabels
+                {
+                    Style = new AxisLabelStyle
+                    {
+                        Colors = new List<string> { "#000000" }
+                    }
+                }
+            }
+        }
+    };
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Check if there's a quickOrder parameter in URL
+            var uri = new Uri(NavigationManager.Uri);
+            
+            if (!string.IsNullOrEmpty(uri.Query))
+            {
+                var queryParams = QueryHelpers.ParseQuery(uri.Query);
+                
+                if (queryParams.TryGetValue("quickOrder", out var productCode))
+                {
+                    // Wait a bit for the page to fully load
+                    await Task.Delay(500);
+                    
+                    // Find the product by code
+                    var product = products.FirstOrDefault(p => p.ProductCode == productCode.ToString());
+                    
+                    if (product != null)
+                    {
+                        await QuickOrder(product);
+                    }
+                    
+                    // Remove the query parameter from URL
+                    NavigationManager.NavigateTo("/", replace: true);
+                }
+            }
+        }
+        
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async Task LoadDashboardData()
+    {
+        isLoading = true;
+
+        // Load basic data
+        products = await ProductService.GetAllProductsAsync();
+        categories = await ProductService.GetAllCategoriesAsync();
+        
+        totalProducts = products.Count;
+        lowStockProducts = products
+            .Where(p => p.IsActive && (p.StockLevel?.CurrentQuantity ?? 0) < p.ReorderPoint)
+            .OrderBy(p => (p.StockLevel?.CurrentQuantity ?? 0) - p.ReorderPoint)
+            .ToList();
+        
+        lowStockCount = lowStockProducts.Count;
+        
+        var activeProducts = products.Count(p => p.IsActive);
+        activeProductsPercentage = totalProducts > 0 ? (int)((activeProducts / (double)totalProducts) * 100) : 0;
+
+        // Load analytics data
+        await LoadAnalytics();
+
+        isLoading = false;
+    }
+
+    private async Task LoadAnalytics()
+    {
+        try
+        {
+            stockDistribution = await ProductService.GetStockDistributionAsync();
+            
+            var trend = await ProductService.GetStockMovementTrendAsync(30);
+            trendData = trend.Select(t => new TrendData 
+            { 
+                Date = t.Date,
+                Purchases = t.Purchases,
+                Adjustments = t.Adjustments,
+                Damaged = t.Damaged,
+                Returns = t.Returns
+            }).ToList();
+            
+            var categories = await ProductService.GetCategoryStockSummaryAsync();
+            categoryData = categories.Select(c => new CategoryData
+            {
+                CategoryName = c.CategoryName,
+                TotalUnits = c.TotalUnits,
+                ProductCount = c.ProductCount
+            }).ToList();
+
+            // Calculate KPIs and new analytics
+            await CalculateKPIs();
+            await LoadDailyMovementData();
+            await LoadRevenueData();
+            await LoadStockValueData();
+            await LoadMonthComparisonData();
+            await LoadMostUsedData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading analytics: {ex.Message}");
+        }
+    }
+
+    private async Task CalculateKPIs()
+    {
+        // Calculate stock value (using estimated unit price since Product model doesn't have it)
+        // TODO: Add UnitPrice to Product model or get from purchase orders
+        var estimatedUnitPrice = 25m; // Mock average unit price
+        totalStockValue = products
+            .Where(p => p.StockLevel != null)
+            .Sum(p => (p.StockLevel?.CurrentQuantity ?? 0) * estimatedUnitPrice);
+
+        // Calculate revenue and cost based on stock levels
+        // Revenue = Stock Value * Average Markup (50%)
+        // Cost = Stock Value (what we paid for current inventory)
+        // Profit = Revenue - Cost
+        totalCost = totalStockValue; // Cost is the value of inventory on hand
+        totalRevenue = totalStockValue * 1.5m; // Revenue potential with 50% markup
+        profit = totalRevenue - totalCost; // Profit margin from stock
+        profitMargin = totalRevenue > 0 ? Math.Round((profit / totalRevenue) * 100, 2) : 0;
+        
+        // Calculate change percentages based on stock level trends
+        // Mock positive growth if we have healthy stock levels
+        var healthyStockPercentage = stockDistribution != null 
+            ? (stockDistribution.HealthyStock / (double)(stockDistribution.HealthyStock + stockDistribution.LowStock + stockDistribution.CriticalStock + stockDistribution.OutOfStock) * 100)
+            : 50;
+        
+        revenueChange = Math.Round((decimal)(healthyStockPercentage / 5), 1); // Higher stock = higher revenue potential
+        costChange = Math.Round((decimal)(healthyStockPercentage / 6), 1); // Proportional cost change
+
+        await Task.CompletedTask;
+    }
+
+    private async Task LoadRevenueData()
+    {
+        // Generate mock revenue data for the last 6 months
+        var random = new Random();
+        revenueData = new List<RevenueData>();
+        
+        for (int i = 5; i >= 0; i--)
+        {
+            var date = DateTime.Today.AddMonths(-i);
+            var revenue = 50000 + (random.Next(-10000, 15000));
+            var cost = revenue * 0.65m;
+            
+            revenueData.Add(new RevenueData
+            {
+                Period = date.ToString("MMM yyyy"),
+                Revenue = revenue,
+                Cost = cost,
+                Profit = revenue - cost
+            });
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private async Task LoadDailyMovementData()
+    {
+        // Calculate days in range
+        var start = startDate ?? DateTime.Today.AddDays(-30);
+        var end = endDate ?? DateTime.Today;
+        var days = (int)(end - start).TotalDays + 1;
+        
+        // Get stock movement trend for the date range
+        var trend = await ProductService.GetStockMovementTrendAsync(days);
+        
+        // Filter by date range and convert to DailyMovementData
+        dailyMovementData = trend
+            .Where(t => DateTime.TryParse(t.Date, out var date) && date >= start && date <= end)
+            .Select(t => new DailyMovementData
+            {
+                Date = t.Date,
+                Purchases = t.Purchases,
+                Adjustments = t.Adjustments,
+                Damaged = t.Damaged,
+                Returns = t.Returns
+            })
+            .OrderBy(d => d.Date)
+            .ToList();
+
+        await Task.CompletedTask;
+    }
+
+    private async Task LoadStockValueData()
+    {
+        // Calculate stock value by category (using estimated unit price)
+        var estimatedUnitPrice = 25m;
+        
+        stockValueData = products
+            .Where(p => p.StockLevel != null && p.Category != null)
+            .GroupBy(p => p.Category!.CategoryName)
+            .Select(g => new StockValueData
+            {
+                CategoryName = g.Key,
+                Value = g.Sum(p => (p.StockLevel?.CurrentQuantity ?? 0) * estimatedUnitPrice)
+            })
+            .Where(v => v.Value > 0)
+            .OrderByDescending(v => v.Value)
+            .ToList();
+
+        await Task.CompletedTask;
+    }
+
+    private async Task LoadMonthComparisonData()
+    {
+        // Generate month-over-month comparison data
+        var random = new Random();
+        
+        monthComparisonData = new List<MonthComparisonData>
+        {
+            new() { Metric = "Revenue", CurrentValue = 68500, PreviousValue = 61000 },
+            new() { Metric = "Orders", CurrentValue = 145, PreviousValue = 132 },
+            new() { Metric = "Stock Moves", CurrentValue = 892, PreviousValue = 756 },
+            new() { Metric = "Stock Value", CurrentValue = totalStockValue, PreviousValue = totalStockValue * 0.92m }
+        };
+
+        await Task.CompletedTask;
+    }
+
+    private async Task LoadMostUsedData()
+    {
+        // Generate random stock movement data with varied heights
+        var random = new Random();
+        var stockTypes = categoryData.Any() 
+            ? categoryData.Select(c => c.CategoryName).Take(12).ToList()
+            : new List<string> { "Electronics", "Furniture", "Supplies", "Hardware", "Textiles", "Food", "Chemicals", "Tools", "Packaging", "Materials", "Components", "Parts" };
+        
+        mostUsedData = stockTypes
+            .Select(type => new MostUsedData
+            {
+                StockType = type,
+                UnitsUsed = random.Next(100, 1000) // Random values between 100 and 1000
+            })
+            .ToList();
+
+        await Task.CompletedTask;
+    }
+
+    private List<StockDistributionData> GetDistributionData()
+    {
+        if (stockDistribution == null) return new();
+        
+        return new List<StockDistributionData>
+        {
+            new() { Label = "Healthy", Value = stockDistribution.HealthyStock },
+            new() { Label = "Low", Value = stockDistribution.LowStock },
+            new() { Label = "Critical", Value = stockDistribution.CriticalStock },
+            new() { Label = "Out of Stock", Value = stockDistribution.OutOfStock }
+        };
+    }
+
+    private MudBlazor.Color GetStockColor(Product product)
+    {
+        var currentStock = product.StockLevel?.CurrentQuantity ?? 0;
+        if (currentStock == 0) return MudBlazor.Color.Error;
+        if (currentStock < product.ReorderPoint) return MudBlazor.Color.Error;
+        if (currentStock < product.ReorderPoint * 1.5) return MudBlazor.Color.Warning;
+        return MudBlazor.Color.Success;
+    }
+
+    private async Task QuickOrder(Product product)
+    {
+        var parameters = new DialogParameters 
+        { 
+            { "Product", product } 
+        };
+        
+        var options = new DialogOptions 
+        { 
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<QuickOrderDialog>("Quick Order", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadDashboardData();
+        }
+    }
+
+    // Chart data classes
+    public class StockDistributionData
+    {
+        public string Label { get; set; } = string.Empty;
+        public int Value { get; set; }
+    }
+
+    public class TrendData
+    {
+        public string Date { get; set; } = string.Empty;
+        public int Purchases { get; set; }
+        public int Adjustments { get; set; }
+        public int Damaged { get; set; }
+        public int Returns { get; set; }
+    }
+
+    public class CategoryData
+    {
+        public string CategoryName { get; set; } = string.Empty;
+        public int TotalUnits { get; set; }
+        public int ProductCount { get; set; }
+    }
+
+    public class RevenueData
+    {
+        public string Period { get; set; } = string.Empty;
+        public decimal Revenue { get; set; }
+        public decimal Cost { get; set; }
+        public decimal Profit { get; set; }
+    }
+
+    public class StockValueData
+    {
+        public string CategoryName { get; set; } = string.Empty;
+        public decimal Value { get; set; }
+    }
+
+    public class MonthComparisonData
+    {
+        public string Metric { get; set; } = string.Empty;
+        public decimal CurrentValue { get; set; }
+        public decimal PreviousValue { get; set; }
+    }
+
+    public class MostUsedData
+    {
+        public string StockType { get; set; } = string.Empty;
+        public int UnitsUsed { get; set; }
+    }
+
+    public class DailyMovementData
+    {
+        public string Date { get; set; } = string.Empty;
+        public int Purchases { get; set; }
+        public int Adjustments { get; set; }
+        public int Damaged { get; set; }
+        public int Returns { get; set; }
+    }
+}

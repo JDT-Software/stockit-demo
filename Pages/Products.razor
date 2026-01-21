@@ -1,0 +1,205 @@
+@page "/products"
+@inject IProductService ProductService
+@inject NavigationManager Navigation
+
+<PageTitle>Products - Stockit</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.Inventory2" Class="mr-2" />
+        Products
+    </MudText>
+
+    @if (isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <MudText>Loading products...</MudText>
+    }
+    else
+    {
+        <!-- Filters -->
+        <MudPaper Class="pa-4 mb-4" Elevation="2">
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="searchText" 
+                                  Placeholder="Search products..." 
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  Immediate="true"
+                                  OnDebounceIntervalElapsed="FilterProducts"
+                                  DebounceInterval="300" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudSelect @bind-Value="selectedCategoryId" 
+                               Label="Filter by Category" 
+                               T="int?"
+                               Clearable="true"
+                               OnClearButtonClick="ClearCategoryFilter">
+                        <MudSelectItem Value="@((int?)null)">All Categories</MudSelectItem>
+                        @foreach (var category in categories)
+                        {
+                            <MudSelectItem Value="@((int?)category.CategoryID)">
+                                @category.CategoryName
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudSelect @bind-Value="stockFilter" 
+                               Label="Stock Status" 
+                               T="string">
+                        <MudSelectItem Value="@("all")">All Products</MudSelectItem>
+                        <MudSelectItem Value="@("low")">Low Stock Only</MudSelectItem>
+                        <MudSelectItem Value="@("in-stock")">In Stock</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <!-- Products Table -->
+        <MudPaper Elevation="2">
+            <MudTable Items="@FilteredProducts()" 
+                      Dense="true" 
+                      Hover="true" 
+                      Striped="true"
+                      Loading="@isLoading"
+                      FixedHeader="true"
+                      Height="600px">
+                <HeaderContent>
+                    <MudTh>Code</MudTh>
+                    <MudTh>Product Name</MudTh>
+                    <MudTh>Category</MudTh>
+                    <MudTh>Current Stock</MudTh>
+                    <MudTh>Reorder Point</MudTh>
+                    <MudTh>Unit</MudTh>
+                    <MudTh>Status</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Code">
+                        <MudText Typo="Typo.body2"><strong>@context.ProductCode</strong></MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Name">@context.ProductName</MudTd>
+                    <MudTd DataLabel="Category">
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                            @context.Category?.CategoryName
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Stock">
+                        <MudChip T="string" 
+                                 Size="Size.Small" 
+                                 Color="GetStockColor(context)">
+                            @(context.StockLevel?.CurrentQuantity ?? 0)
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Reorder">@context.ReorderPoint</MudTd>
+                    <MudTd DataLabel="Unit">@context.UnitOfMeasure</MudTd>
+                    <MudTd DataLabel="Status">
+                        @if (IsLowStock(context))
+                        {
+                            <MudChip T="string" 
+                                     Size="Size.Small" 
+                                     Color="Color.Error"
+                                     Icon="@Icons.Material.Filled.Warning">
+                                Low Stock
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" 
+                                     Size="Size.Small" 
+                                     Color="Color.Success"
+                                     Icon="@Icons.Material.Filled.CheckCircle">
+                                OK
+                            </MudChip>
+                        }
+                    </MudTd>
+                </RowTemplate>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new int[]{25, 50, 100}" />
+                </PagerContent>
+            </MudTable>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private List<Product> products = new();
+    private List<Category> categories = new();
+    private bool isLoading = true;
+    private string searchText = "";
+    private int? selectedCategoryId = null;
+    private string stockFilter = "all";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+
+        categories = await ProductService.GetAllCategoriesAsync();
+        products = await ProductService.GetAllProductsAsync();
+
+        isLoading = false;
+    }
+
+    private IEnumerable<Product> FilteredProducts()
+    {
+        var filtered = products.AsEnumerable();
+
+        // Search filter
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            filtered = filtered.Where(p =>
+                p.ProductName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                p.ProductCode.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                p.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Category filter
+        if (selectedCategoryId.HasValue)
+        {
+            filtered = filtered.Where(p => p.CategoryID == selectedCategoryId.Value);
+        }
+
+        // Stock status filter
+        filtered = stockFilter switch
+        {
+            "low" => filtered.Where(p => IsLowStock(p)),
+            "in-stock" => filtered.Where(p => !IsLowStock(p)),
+            _ => filtered
+        };
+
+        return filtered.OrderBy(p => p.ProductName);
+    }
+
+    private void FilterProducts()
+    {
+        StateHasChanged();
+    }
+
+    private void ClearCategoryFilter()
+    {
+        selectedCategoryId = null;
+    }
+
+    private bool IsLowStock(Product product)
+    {
+        var currentStock = product.StockLevel?.CurrentQuantity ?? 0;
+        return currentStock < product.ReorderPoint;
+    }
+
+    private MudBlazor.Color GetStockColor(Product product)
+    {
+        var currentStock = product.StockLevel?.CurrentQuantity ?? 0;
+        
+        if (currentStock < product.ReorderPoint)
+            return MudBlazor.Color.Error;
+        if (currentStock < product.ReorderPoint * 1.5)
+            return MudBlazor.Color.Warning;
+        
+        return MudBlazor.Color.Success;
+    }
+}

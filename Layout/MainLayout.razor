@@ -1,0 +1,84 @@
+﻿@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="customTheme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        <img src="Red White Minimal SImple Vintage Typographic Fashion Store Berry Logo (1).svg"
+             alt="Stockit"
+             style="height: 80px; margin-left: 12px;" />
+        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.Info" Color="Color.Inherit" Href="https://learn.microsoft.com/aspnet/core/" Target="_blank" />
+    </MudAppBar>
+    
+    <MudDrawer @bind-Open="drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
+        <NavMenu />
+    </MudDrawer>
+    
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="mt-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool drawerOpen = true;
+    
+    private MudTheme customTheme = new MudTheme()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#DC2F02",
+            Secondary = "#E85D04",
+            Background = "#EAE2B7",
+            Surface = "#EAE2B7",
+            AppbarBackground = "#03071E",
+            AppbarText = "#EAE2B7",
+            DrawerBackground = "#03071E",
+            DrawerText = "#EAE2B7",
+            TextPrimary = "#03071E",
+            TextSecondary = "#370617",
+            ActionDefault = "#DC2F02",
+            ActionDisabled = "#6A040F",
+            ActionDisabledBackground = "#EAE2B7",
+            Divider = "#370617",
+            DividerLight = "#EAE2B7",
+            TableLines = "#370617",
+            LinesDefault = "#370617",
+            LinesInputs = "#DC2F02",
+            TextDisabled = "#6A040F"
+        },
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#DC2F02",
+            Secondary = "#E85D04",
+            Background = "#03071E",
+            Surface = "#370617",
+            AppbarBackground = "#03071E",
+            AppbarText = "#EAE2B7",
+            DrawerBackground = "#03071E",
+            DrawerText = "#EAE2B7",
+            TextPrimary = "#EAE2B7",
+            TextSecondary = "#F48C06",
+            ActionDefault = "#DC2F02",
+            ActionDisabled = "#6A040F",
+            ActionDisabledBackground = "#03071E",
+            Divider = "#370617",
+            DividerLight = "#03071E",
+            TableLines = "#370617",
+            LinesDefault = "#370617",
+            LinesInputs = "#F48C06",
+            TextDisabled = "#6A040F"
+        }
+    };
+    
+    private void DrawerToggle()
+    {
+        drawerOpen = !drawerOpen;
+    }
+}

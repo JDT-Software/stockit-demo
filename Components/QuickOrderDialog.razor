@@ -1,0 +1,182 @@
+@using Stockit.Models
+@inject IProductService ProductService
+@inject ISupplierService SupplierService
+@inject IPurchaseOrderService PurchaseOrderService
+@inject ISnackbar Snackbar
+
+<MudDialog CloseButton="true">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Class="mr-2" />
+            Quick Order - @Product?.ProductName
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (isLoading)
+        {
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            <MudText Class="mt-2">Finding supplier...</MudText>
+        }
+        else if (supplier == null)
+        {
+            <MudAlert Severity="Severity.Warning">
+                No supplier found for this product. Please set up a supplier mapping first.
+            </MudAlert>
+        }
+        else
+        {
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudPaper Class="pa-3" Elevation="0" Style="background-color: #f5f5f5;">
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">
+                                <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Small" /> 
+                                Supplier: <strong>@supplier.SupplierName</strong>
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                Expected Delivery: @ExpectedDeliveryDate.ToString("MMM dd, yyyy") 
+                                (@supplier.LeadTimeDays days)
+                            </MudText>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudDivider Class="my-2" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudPaper Class="pa-3" Elevation="1">
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.subtitle2">Product Details</MudText>
+                            <MudText Typo="Typo.body1"><strong>@Product?.ProductCode</strong> - @Product?.ProductName</MudText>
+                            <MudStack Row="true" Spacing="2">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error">
+                                    Current: @(Product?.StockLevel?.CurrentQuantity ?? 0) @Product?.UnitOfMeasure
+                                </MudChip>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                    Reorder Point: @Product?.ReorderPoint
+                                </MudChip>
+                            </MudStack>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudNumericField @bind-Value="orderQuantity"
+                                     Label="Quantity to Order"
+                                     Min="1"
+                                     Variant="Variant.Outlined"
+                                     Adornment="Adornment.End"
+                                     AdornmentText="@Product?.UnitOfMeasure"
+                                     HelperText="@($"Suggested: {Product?.ReorderQuantity} {Product?.UnitOfMeasure}")" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="notes"
+                                  Label="Order Notes (Optional)"
+                                  Lines="3"
+                                  Variant="Variant.Outlined"
+                                  Placeholder="Any special instructions..." />
+                </MudItem>
+            </MudGrid>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.Send"
+                   OnClick="CreateQuickOrder"
+                   Disabled="@(supplier == null || isCreating || orderQuantity <= 0)">
+            @if (isCreating)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            }
+            else
+            {
+                <span>Create Order</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] 
+    MudBlazor.IDialogReference MudDialog { get; set; } = null!;
+    
+    [Parameter] 
+    public Product? Product { get; set; }
+
+    private Supplier? supplier;
+    private int orderQuantity = 0;
+    private string notes = "";
+    private bool isLoading = true;
+    private bool isCreating = false;
+
+    private DateTime ExpectedDeliveryDate => DateTime.Now.AddDays(supplier?.LeadTimeDays ?? 7);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Set suggested quantity from product's reorder quantity
+        orderQuantity = Product?.ReorderQuantity ?? 1;
+
+        // Fetch the primary supplier for this product
+        if (Product != null)
+        {
+            supplier = await ProductService.GetPrimarySupplierForProductAsync(Product.ProductID);
+        }
+
+        isLoading = false;
+    }
+
+    private void Cancel()
+    {
+        MudDialog?.Close(DialogResult.Cancel());
+    }
+
+    private async Task CreateQuickOrder()
+    {
+        if (Product == null || supplier == null || orderQuantity <= 0)
+        {
+            Snackbar.Add("Invalid order details", Severity.Error);
+            return;
+        }
+
+        isCreating = true;
+
+        var purchaseOrder = new PurchaseOrder
+        {
+            SupplierID = supplier.SupplierID,
+            OrderDate = DateTime.Now,
+            ExpectedDeliveryDate = ExpectedDeliveryDate,
+            Status = "Pending",
+            Notes = notes,
+            Items = new List<PurchaseOrderItem>
+            {
+                new PurchaseOrderItem
+                {
+                    ProductID = Product.ProductID,
+                    Product = Product,
+                    OrderedQuantity = orderQuantity,  // Changed
+                    UnitCost = 0  // Changed
+                }
+            },
+            TotalAmount = 0
+        };
+
+        var success = await PurchaseOrderService.CreatePurchaseOrderAsync(purchaseOrder);
+
+        isCreating = false;
+
+        if (success)
+        {
+            Snackbar.Add($"Purchase order for {Product.ProductName} created successfully!", Severity.Success);
+            MudDialog?.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            Snackbar.Add("Failed to create purchase order", Severity.Error);
+        }
+    }
+}

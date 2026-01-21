@@ -1,0 +1,242 @@
+@using Stockit.Services
+@inject IAuthService AuthService
+@inject ISnackbar Snackbar
+
+<MudThemeProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<style>
+    .login-card .mud-input-adornment .mud-icon-root {
+        color: #DC2F02 !important;
+    }
+
+    .login-card .mud-input-outlined {
+        border-color: #DC2F02 !important;
+    }
+
+    .login-card .mud-input-outlined:hover {
+        border-color: #E85D04 !important;
+    }
+
+    .login-card .mud-input-outlined.mud-input-focused {
+        border-color: #E85D04 !important;
+        border-width: 2px !important;
+    }
+
+    .login-card .mud-input-outlined.mud-input-focused .mud-input-label {
+        color: #E85D04 !important;
+    }
+
+    .login-button {
+        background-color: #DC2F02 !important;
+        color: #EAE2B7 !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .login-button:hover {
+        background-color: #9D0208 !important;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(220, 47, 2, 0.4) !important;
+    }
+
+    .login-divider {
+        background-color: #370617 !important;
+    }
+
+    .login-container {
+        width: 100%;
+        max-width: 420px;
+    }
+
+    /* Desktop landscape layout */
+    @@media (min-width: 960px) {
+        .login-container {
+            max-width: 900px;
+        }
+
+        .login-layout {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .login-logo-section {
+            flex: 0 0 45%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .login-form-section {
+            flex: 1;
+            padding: 2rem;
+        }
+
+        .login-divider-vertical {
+            display: block;
+            width: 2px;
+            height: 400px;
+            background-color: #370617 !important;
+        }
+
+        .login-divider-horizontal {
+            display: none;
+        }
+    }
+
+    /* Mobile portrait layout */
+    @@media (max-width: 959px) {
+        .login-layout {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .login-logo-section {
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .login-form-section {
+            padding: 1rem;
+        }
+
+        .login-divider-vertical {
+            display: none;
+        }
+
+        .login-divider-horizontal {
+            display: block;
+        }
+    }
+</style>
+
+<MudOverlay Visible="true" DarkBackground="true" Absolute="false" Style="background-color: #03071E;">
+    <MudPaper Elevation="8" Class="pa-8 login-card login-container" Style="background-color: #EAE2B7; border-radius: 16px;">
+        <div class="login-layout">
+            <!-- Logo Section -->
+            <div class="login-logo-section">
+                <img src="log in logo.svg"
+                     alt="Stockit Logo"
+                     style="width: 100%; max-width: 250px; height: auto;" />
+            </div>
+
+            <!-- Vertical Divider (Desktop only) -->
+            <div class="login-divider-vertical"></div>
+
+            <!-- Horizontal Divider (Mobile only) -->
+            <MudDivider Class="login-divider login-divider-horizontal" />
+
+            <!-- Form Section -->
+            <div class="login-form-section">
+                <MudStack Spacing="3">
+                    <MudTextField @bind-Value="username"
+                                  Label="Username"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Person"
+                                  Style="background-color: white; border-radius: 8px;" />
+
+                    <MudTextField @bind-Value="password"
+                                  Label="Password"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Password"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Lock"
+                                  OnKeyUp="HandleKeyPress"
+                                  Style="background-color: white; border-radius: 8px;" />
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <MudAlert Severity="Severity.Error" 
+                                  Dense="true" 
+                                  Style="background-color: rgba(220, 47, 2, 0.1); color: #DC2F02; border-left: 4px solid #DC2F02;">
+                            @errorMessage
+                        </MudAlert>
+                    }
+
+                    <MudButton Variant="Variant.Filled"
+                               FullWidth="true"
+                               Size="MudBlazor.Size.Large"
+                               OnClick="HandleLogin"
+                               Disabled="isLoading"
+                               Class="login-button"
+                               Style="height: 50px; font-weight: 600; border-radius: 8px; text-transform: uppercase; letter-spacing: 1px;">
+                        @if (isLoading)
+                        {
+                            <MudProgressCircular Size="MudBlazor.Size.Small" Indeterminate="true" Style="color: #EAE2B7;" />
+                            <span class="ml-2">Signing in...</span>
+                        }
+                        else
+                        {
+                            <span>Sign In</span>
+                        }
+                    </MudButton>
+
+                    <!-- Footer -->
+                    <MudText Typo="Typo.caption" Align="Align.Center" Style="color: #370617; margin-top: 16px;">
+                        © 2025 Stockit. All rights reserved.
+                    </MudText>
+                </MudStack>
+            </div>
+        </div>
+    </MudPaper>
+</MudOverlay>
+
+@code {
+    [Parameter]
+    public EventCallback OnLoginSuccess { get; set; }
+
+    private string username = "";
+    private string password = "";
+    private string errorMessage = "";
+    private bool isLoading = false;
+
+    private async Task HandleLogin()
+    {
+        errorMessage = "";
+
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+        {
+            errorMessage = "Please enter both username and password";
+            return;
+        }
+
+        isLoading = true;
+
+        try
+        {
+            var success = await AuthService.LoginAsync(username, password);
+
+            if (success)
+            {
+                Snackbar.Add("Login successful! Welcome back.", Severity.Success);
+                await OnLoginSuccess.InvokeAsync();
+            }
+            else
+            {
+                errorMessage = "Invalid username or password";
+                password = "";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "An error occurred. Please try again.";
+            Console.WriteLine($"Login error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await HandleLogin();
+        }
+    }
+}

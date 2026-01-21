@@ -1,0 +1,272 @@
+@page "/stock-entry"
+@inject IProductService ProductService
+@inject ISnackbar Snackbar
+
+<PageTitle>Stock Entry - Stockit</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.Inventory" Class="mr-2" />
+        Stock Entry
+    </MudText>
+
+    @if (isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <MudText>Loading products...</MudText>
+    }
+    else
+    {
+        <MudPaper Class="pa-4 mb-4">
+            <MudSelect @bind-Value="selectedCategoryId" 
+                       Label="Filter by Category" 
+                       Variant="Variant.Outlined"
+                       T="int?"
+                       Clearable="true">
+                <MudSelectItem Value="@((int?)null)">All Categories</MudSelectItem>
+                @foreach (var category in categories)
+                {
+                    <MudSelectItem Value="@((int?)category.CategoryID)">@category.CategoryName</MudSelectItem>
+                }
+            </MudSelect>
+        </MudPaper>
+
+        <MudExpansionPanels MultiExpansion="true">
+            @foreach (var categoryGroup in GetProductsByCategory())
+            {
+                <MudExpansionPanel>
+                    <TitleContent>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width: 100%;">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Category" />
+                                <MudText Typo="Typo.h6"><strong>@categoryGroup.Key</strong></MudText>
+                            </MudStack>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                                @categoryGroup.Count() products
+                            </MudChip>
+                        </MudStack>
+                    </TitleContent>
+                    <ChildContent>
+                        @foreach (var prefixGroup in categoryGroup.GroupBy(p => GetCartonPrefix(p.ProductCode)))
+                        {
+                            <MudCard Class="mb-3" Elevation="1">
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.subtitle1">
+                                            <strong>@(string.IsNullOrEmpty(prefixGroup.Key) ? "Other" : prefixGroup.Key)</strong>
+                                        </MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    @foreach (var product in prefixGroup)
+                                    {
+                                        <MudPaper Class="pa-3 mb-2" Elevation="0" Style="border: 2px solid #000000; border-radius: 4px;">
+                                            <MudGrid>
+                                                <MudItem xs="12" md="3">
+                                                    <MudText Typo="Typo.body1"><strong>@product.ProductCode</strong></MudText>
+                                                    <MudText Typo="Typo.body2" Color="Color.Secondary">@product.ProductName</MudText>
+                                                </MudItem>
+                                                <MudItem xs="12" md="2">
+                                                    <MudChip T="string" Color="@GetStockColor(product)" Icon="@Icons.Material.Filled.Inventory">
+                                                        Current: @(product.StockLevel?.CurrentQuantity ?? 0)
+                                                    </MudChip>
+                                                </MudItem>
+                                                <MudItem xs="12" md="2">
+                                                    <MudSelect T="string" 
+                                                               @bind-Value="@movementTypes[product.ProductID]" 
+                                                               Label="Type"
+                                                               Variant="Variant.Outlined">
+                                                        <MudSelectItem Value="@("StockCount")">Stock Count</MudSelectItem>
+                                                        <MudSelectItem Value="@("Adjustment")">Adjustment</MudSelectItem>
+                                                        <MudSelectItem Value="@("Damaged")">Damaged</MudSelectItem>
+                                                        <MudSelectItem Value="@("Return")">Return</MudSelectItem>
+                                                    </MudSelect>
+                                                </MudItem>
+                                                <MudItem xs="12" md="3">
+                                                    @if (movementTypes[product.ProductID] == "StockCount")
+                                                    {
+                                                        <MudNumericField @bind-Value="stockQuantities[product.ProductID]"
+                                                                         Label="New Quantity"
+                                                                         Variant="Variant.Outlined"
+                                                                         Min="0" />
+                                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                            Enter total after counting
+                                                        </MudText>
+                                                    }
+                                                    else
+                                                    {
+                                                        <MudNumericField @bind-Value="adjustmentAmounts[product.ProductID]"
+                                                                         Label="Adjust By"
+                                                                         Variant="Variant.Outlined"
+                                                                         Adornment="Adornment.Start"
+                                                                         AdornmentText="+/-" />
+                                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                            + to add, - to remove
+                                                        </MudText>
+                                                    }
+                                                </MudItem>
+                                                <MudItem xs="12" md="2">
+                                                    <MudButton Variant="Variant.Filled"
+                                                               Color="Color.Primary"
+                                                               OnClick="@(() => UpdateStock(product))"
+                                                               FullWidth="true"
+                                                               Disabled="@(savingProducts.Contains(product.ProductID))">
+                                                        @if (savingProducts.Contains(product.ProductID))
+                                                        {
+                                                            <MudProgressCircular Size="MudBlazor.Size.Small" Indeterminate="true" />
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>Update</span>
+                                                        }
+                                                    </MudButton>
+                                                </MudItem>
+                                                @if (movementTypes[product.ProductID] != "StockCount")
+                                                {
+                                                    <MudItem xs="12">
+                                                        <MudTextField @bind-Value="notes[product.ProductID]"
+                                                                      Label="Reason (Required)"
+                                                                      Variant="Variant.Outlined"
+                                                                      Lines="2"
+                                                                      Placeholder="Explain the reason for this adjustment..." />
+                                                    </MudItem>
+                                                }
+                                            </MudGrid>
+                                        </MudPaper>
+                                    }
+                                </MudCardContent>
+                            </MudCard>
+                        }
+                    </ChildContent>
+                </MudExpansionPanel>
+            }
+        </MudExpansionPanels>
+    }
+</MudContainer>
+
+@code {
+    private List<Product> products = new();
+    private List<Category> categories = new();
+    private Dictionary<int, int> stockQuantities = new();
+    private Dictionary<int, int> adjustmentAmounts = new();
+    private Dictionary<int, string> movementTypes = new();
+    private Dictionary<int, string> notes = new();
+    private HashSet<int> savingProducts = new();
+    private int? selectedCategoryId = null;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        products = await ProductService.GetAllProductsAsync();
+        categories = await ProductService.GetAllCategoriesAsync();
+
+        // Initialize dictionaries
+        foreach (var product in products)
+        {
+            stockQuantities[product.ProductID] = product.StockLevel?.CurrentQuantity ?? 0;
+            adjustmentAmounts[product.ProductID] = 0;
+            movementTypes[product.ProductID] = "StockCount"; // Default
+            notes[product.ProductID] = "";
+        }
+
+        isLoading = false;
+    }
+
+    private IEnumerable<IGrouping<string, Product>> GetProductsByCategory()
+    {
+        var filtered = products.Where(p => p.IsActive);
+
+        if (selectedCategoryId.HasValue)
+        {
+            filtered = filtered.Where(p => p.CategoryID == selectedCategoryId.Value);
+        }
+
+        return filtered
+            .GroupBy(p => p.Category?.CategoryName ?? "Other")
+            .OrderBy(g => g.Key);
+    }
+
+    private string GetCartonPrefix(string productCode)
+    {
+        if (string.IsNullOrEmpty(productCode)) return "";
+        
+        var parts = productCode.Split(' ');
+        return parts.Length > 0 ? parts[0] : "";
+    }
+
+    private MudBlazor.Color GetStockColor(Product product)
+    {
+        var currentStock = product.StockLevel?.CurrentQuantity ?? 0;
+        if (currentStock == 0) return MudBlazor.Color.Error;
+        if (currentStock < product.ReorderPoint) return MudBlazor.Color.Error;
+        if (currentStock < product.ReorderPoint * 1.5) return MudBlazor.Color.Warning;
+        return MudBlazor.Color.Success;
+    }
+
+    private async Task UpdateStock(Product product)
+    {
+        var movementType = movementTypes[product.ProductID];
+        
+        // Validate notes for non-stock-count types
+        if (movementType != "StockCount" && string.IsNullOrWhiteSpace(notes[product.ProductID]))
+        {
+            Snackbar.Add("Please provide a reason for this adjustment", Severity.Warning);
+            return;
+        }
+
+        savingProducts.Add(product.ProductID);
+
+        int newQuantity;
+        int quantityChange;
+        var currentQuantity = product.StockLevel?.CurrentQuantity ?? 0;
+
+        // Calculate new quantity based on movement type
+        if (movementType == "StockCount")
+        {
+            newQuantity = stockQuantities[product.ProductID];
+            quantityChange = newQuantity - currentQuantity;
+        }
+        else
+        {
+            quantityChange = adjustmentAmounts[product.ProductID];
+            newQuantity = currentQuantity + quantityChange;
+
+            if (newQuantity < 0)
+            {
+                Snackbar.Add("Adjustment would result in negative stock!", Severity.Error);
+                savingProducts.Remove(product.ProductID);
+                return;
+            }
+        }
+
+        // Update stock level
+        var success = await ProductService.UpdateStockLevelAsync(
+            product.ProductID, 
+            newQuantity, 
+            movementType, 
+            notes[product.ProductID]);
+
+        savingProducts.Remove(product.ProductID);
+
+        if (success)
+        {
+            product.StockLevel!.CurrentQuantity = newQuantity;
+            stockQuantities[product.ProductID] = newQuantity;
+            adjustmentAmounts[product.ProductID] = 0;
+            notes[product.ProductID] = "";
+
+            var changeText = quantityChange >= 0 ? $"+{quantityChange}" : quantityChange.ToString();
+            Snackbar.Add($"Stock updated: {product.ProductName} ({changeText})", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Failed to update stock", Severity.Error);
+        }
+    }
+}
