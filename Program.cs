@@ -24,7 +24,8 @@ builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
 
 // Configure HttpClient with JWT token
-var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://stockit-api-jacques.azurewebsites.net";
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"] 
+    ?? "https://stockit-api-jacques.azurewebsites.net";
 
 builder.Services.AddScoped(sp =>
 {
