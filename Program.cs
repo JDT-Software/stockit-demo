@@ -16,8 +16,12 @@ builder.Services.AddBlazoredLocalStorage();
 // Add MudBlazor
 builder.Services.AddMudServices();
 
-// Add AuthService
+// Add all services
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAuthorizationService, AuthorizationService>();
+builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
 
 // Configure HttpClient with JWT token
 var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://stockit-api-jacques.azurewebsites.net";
