@@ -127,11 +127,8 @@
                                                                 <MudPaper Elevation="0" Class="pa-2" Style="background-color: #FFFCF2;">
                                                                     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                                                         <div>
-                                                                            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #000000;">
-                                                                                @item.Product?.ProductName
-                                                                            </MudText>
                                                                             <MudText Typo="Typo.caption" Style="color: #000000;">
-                                                                                @item.Product?.ProductCode
+                                                                                @item.Product?.ProductCode - @item.Product?.ProductName
                                                                             </MudText>
                                                                         </div>
                                                                         <MudChip T="string" Size="Size.Small" Color="Color.Warning">
@@ -321,11 +318,8 @@
                                                                 <MudPaper Elevation="0" Class="pa-2" Style="background-color: #FFFCF2;">
                                                                     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                                                         <div>
-                                                                            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #000000;">
-                                                                                @item.Product?.ProductName
-                                                                            </MudText>
                                                                             <MudText Typo="Typo.caption" Style="color: #000000;">
-                                                                                @item.Product?.ProductCode
+                                                                                @item.Product?.ProductCode - @item.Product?.ProductName
                                                                             </MudText>
                                                                         </div>
                                                                         <MudChip T="string" Size="Size.Small" Color="Color.Info">
@@ -491,11 +485,8 @@
                                                                 <MudPaper Elevation="0" Class="pa-2" Style="background-color: #FFFCF2;">
                                                                     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                                                         <div>
-                                                                            <MudText Typo="Typo.body2" Style="font-weight: 600;">
-                                                                                @item.Product?.ProductName
-                                                                            </MudText>
                                                                             <MudText Typo="Typo.caption" Style="color: #CCC5B9;">
-                                                                                @item.Product?.ProductCode
+                                                                                @item.Product?.ProductCode - @item.Product?.ProductName
                                                                             </MudText>
                                                                         </div>
                                                                         <MudChip T="string" Size="Size.Small" Color="Color.Primary">
@@ -727,11 +718,8 @@
                                                                 <MudPaper Elevation="0" Class="pa-2" Style="background-color: #FFFCF2;">
                                                                     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                                                         <div>
-                                                                            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #000000;">
-                                                                                @item.Product?.ProductName
-                                                                            </MudText>
                                                                             <MudText Typo="Typo.caption" Style="color: #000000;">
-                                                                                @item.Product?.ProductCode
+                                                                                @item.Product?.ProductCode - @item.Product?.ProductName
                                                                             </MudText>
                                                                         </div>
                                                                         <MudStack Row="true" Spacing="1">
@@ -1000,11 +988,8 @@
                                                                 <MudPaper Elevation="0" Class="pa-2" Style="background-color: #f8f9fa; opacity: 0.7;">
                                                                     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                                                         <div>
-                                                                            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #6c757d; text-decoration: line-through;">
-                                                                                @item.Product?.ProductName
-                                                                            </MudText>
                                                                             <MudText Typo="Typo.caption" Style="color: #CCC5B9;">
-                                                                                @item.Product?.ProductCode
+                                                                                @item.Product?.ProductCode - @item.Product?.ProductName
                                                                             </MudText>
                                                                         </div>
                                                                         <MudChip T="string" Size="Size.Small" Color="Color.Default">
@@ -1143,8 +1128,7 @@
         // Build items list with HTML for better formatting
         var itemsHtml = string.Join("<br/>", order.Items.Select(i => 
             $"<div style='color: #000000; padding: 4px 0;'>" +
-            $"<strong>{i.Product?.ProductName}</strong><br/>" +
-            $"<span style='font-size: 0.9em;'>{i.Product?.ProductCode}</span><br/>" +
+            $"<span style='font-size: 0.9em;'>{i.Product?.ProductCode} - {i.Product?.ProductName}</span><br/>" +
             $"<span>{i.OrderedQuantity} {i.Product?.UnitOfMeasure}</span>" +
             $"</div>"));
         
