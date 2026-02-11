@@ -1269,6 +1269,31 @@
         }
     }
 
+        private async Task ConfirmOrder(PurchaseOrder po)
+        {
+            try
+            {
+                var response = await Http.PostAsJsonAsync(
+                    $"api/purchaseorders/{po.PurchaseOrderID}/confirm",
+                    po.Items);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add($"Order {po.PONumber} confirmed and stock updated!", Severity.Success);
+                    await LoadOrders();
+                }
+                else
+                {
+                    var errorText = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Failed to confirm order: {errorText}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error confirming order: {ex.Message}", Severity.Error);
+            }
+        }
+
     private async Task ViewDetails(PurchaseOrder po)
     {
         var parameters = new DialogParameters
@@ -1531,63 +1556,63 @@
     }
 
     private async Task ConfirmAndReceiveStock(PurchaseOrder po)
-    {
-        var hasFiles = uploadedFiles.ContainsKey(po.PurchaseOrderID) && uploadedFiles[po.PurchaseOrderID].Any();
-        
-        var fileCount = hasFiles ? uploadedFiles[po.PurchaseOrderID].Count : 0;
-        var message = hasFiles 
-            ? $"Confirm receipt and upload {fileCount} document(s)?"
-            : "Confirm receipt without documents?\n\nYou can upload documents later if needed.";
-        
-        var confirm = await DialogService.ShowMessageBox(
-            "Confirm & Receive Stock",
-            message,
-            yesText: "Confirm & Receive", cancelText: "Cancel");
+{
+    var hasFiles = uploadedFiles.ContainsKey(po.PurchaseOrderID) && uploadedFiles[po.PurchaseOrderID].Any();
+    
+    var fileCount = hasFiles ? uploadedFiles[po.PurchaseOrderID].Count : 0;
+    var message = hasFiles 
+        ? $"Confirm receipt and upload {fileCount} document(s)?"
+        : "Confirm receipt without documents?\n\nYou can upload documents later if needed.";
+    
+    var confirm = await DialogService.ShowMessageBox(
+        "Confirm & Receive Stock",
+        message,
+        yesText: "Confirm & Receive", cancelText: "Cancel");
 
-        if (confirm == true)
+    if (confirm == true)
+    {
+        try
         {
-            try
+            // Step 1: Upload files if any
+            if (hasFiles)
             {
-                // Step 1: Upload files if any
-                if (hasFiles)
+                Snackbar.Add($"Uploading {fileCount} document(s)...", Severity.Info);
+                
+                var uploadSuccess = await UploadDocuments(po.PurchaseOrderID, uploadedFiles[po.PurchaseOrderID]);
+                
+                if (!uploadSuccess)
                 {
-                    Snackbar.Add($"Uploading {fileCount} document(s)...", Severity.Info);
-                    
-                    var uploadSuccess = await UploadDocuments(po.PurchaseOrderID, uploadedFiles[po.PurchaseOrderID]);
-                    
-                    if (!uploadSuccess)
-                    {
-                        Snackbar.Add("Failed to upload documents", Severity.Error);
-                        return;
-                    }
-                    
-                    Snackbar.Add($"{fileCount} document(s) uploaded successfully", Severity.Success);
-                    
-                    // Update document count
-                    documentCounts[po.PurchaseOrderID] = fileCount;
-                }
-                else
-                {
-                    // No documents uploaded
-                    documentCounts[po.PurchaseOrderID] = 0;
+                    Snackbar.Add("Failed to upload documents", Severity.Error);
+                    return;
                 }
                 
-                // Step 2: Receive stock (existing functionality)
-                await ReceiveOrder(po);
+                Snackbar.Add($"{fileCount} document(s) uploaded successfully", Severity.Success);
                 
-                // Step 3: Cleanup
-                if (uploadedFiles.ContainsKey(po.PurchaseOrderID))
-                {
-                    uploadedFiles.Remove(po.PurchaseOrderID);
-                }
-                expandedOrderId = null;
+                // Update document count
+                documentCounts[po.PurchaseOrderID] = fileCount;
             }
-            catch (Exception ex)
+            else
             {
-                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+                // No documents uploaded
+                documentCounts[po.PurchaseOrderID] = 0;
             }
+            
+            // Step 2: Confirm stock (calls /confirm endpoint) ← CHANGED THIS
+            await ConfirmOrder(po);
+            
+            // Step 3: Cleanup
+            if (uploadedFiles.ContainsKey(po.PurchaseOrderID))
+            {
+                uploadedFiles.Remove(po.PurchaseOrderID);
+            }
+            expandedOrderId = null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
         }
     }
+}
 
     private async Task<bool> UploadDocuments(int purchaseOrderId, List<IBrowserFile> files)
     {
