@@ -1273,6 +1273,15 @@
         {
             try
             {
+                // Set ReceivedQuantity = OrderedQuantity for all items
+                foreach (var item in po.Items)
+                {
+                    if (item.ReceivedQuantity == 0 || item.ReceivedQuantity == null)
+                    {
+                        item.ReceivedQuantity = item.OrderedQuantity;
+                    }
+                }
+
                 var response = await Http.PostAsJsonAsync(
                     $"api/purchaseorders/{po.PurchaseOrderID}/confirm",
                     po.Items);
