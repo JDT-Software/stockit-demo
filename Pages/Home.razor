@@ -67,27 +67,31 @@
                                 <ApexPointSeries TItem="DailyMovementData"
                                                  Items="dailyMovementData"
                                                  Name="Purchases"
-                                                 SeriesType="SeriesType.Line"
+                                                 SeriesType="SeriesType.Area"
                                                  XValue="@(e => e.Date)"
-                                                 YAggregate="@(e => e.Sum(v => (decimal)v.Purchases))" />
+                                                 YValue="@(e => (decimal)e.Purchases)"
+                                                 OrderBy="e => e.X" />
                                 <ApexPointSeries TItem="DailyMovementData"
                                                  Items="dailyMovementData"
                                                  Name="Adjustments"
-                                                 SeriesType="SeriesType.Line"
+                                                 SeriesType="SeriesType.Area"
                                                  XValue="@(e => e.Date)"
-                                                 YAggregate="@(e => e.Sum(v => (decimal)v.Adjustments))" />
+                                                 YValue="@(e => (decimal)Math.Abs(e.Adjustments))"
+                                                 OrderBy="e => e.X" />
                                 <ApexPointSeries TItem="DailyMovementData"
                                                  Items="dailyMovementData"
                                                  Name="Damaged"
-                                                 SeriesType="SeriesType.Line"
+                                                 SeriesType="SeriesType.Area"
                                                  XValue="@(e => e.Date)"
-                                                 YAggregate="@(e => e.Sum(v => (decimal)v.Damaged))" />
+                                                 YValue="@(e => (decimal)Math.Abs(e.Damaged))"
+                                                 OrderBy="e => e.X" />
                                 <ApexPointSeries TItem="DailyMovementData"
                                                  Items="dailyMovementData"
                                                  Name="Returns"
-                                                 SeriesType="SeriesType.Line"
+                                                 SeriesType="SeriesType.Area"
                                                  XValue="@(e => e.Date)"
-                                                 YAggregate="@(e => e.Sum(v => (decimal)v.Returns))" />
+                                                 YValue="@(e => (decimal)Math.Abs(e.Returns))"
+                                                 OrderBy="e => e.X" />
                             </ApexChart>
                         }
                         else
@@ -327,59 +331,26 @@
     // Chart options for sharp line edges (stock chart style)
     private ApexChartOptions<DailyMovementData> movementChartOptions = new()
     {
-        Stroke = new Stroke
-        {
-            Curve = Curve.Straight,
-            Width = 2
-        },
         Chart = new Chart
         {
-            Zoom = new Zoom
+            Stacked = true,
+            StackType = StackType.Normal
+        },
+        Colors = new List<string> { "#ef4444", "#f97316", "#eab308", "#000000" },
+        Fill = new Fill
+        {
+            Type = new List<FillType> { FillType.Gradient },
+            Gradient = new FillGradient
             {
-                Enabled = true
-            },
-            Background = "#EAE2B7"
-        },
-        Colors = new List<string>
-        {
-            "#DC2F02", // Red for Purchases
-            "#E85D04", // Orange for Adjustments
-            "#FAA307", // Golden orange for Damaged
-            "#03071E"  // Dark navy for Returns
-        },
-        Theme = new Theme
-        {
-            Mode = Mode.Light
-        },
-        Yaxis = new List<YAxis>
-        {
-            new YAxis
-            {
-                Labels = new YAxisLabels
-                {
-                    Style = new AxisLabelStyle
-                    {
-                        Colors = new List<string> { "#000000" }
-                    }
-                }
+                ShadeIntensity = 1,
+                OpacityFrom = 0.7,
+                OpacityTo = 0.3
             }
         },
-        Xaxis = new XAxis
+        Stroke = new Stroke
         {
-            Labels = new XAxisLabels
-            {
-                Style = new AxisLabelStyle
-                {
-                    Colors = new List<string> { "#000000" }
-                }
-            }
-        },
-        Legend = new Legend
-        {
-            Labels = new LegendLabels
-            {
-                Colors = new List<string> { "#000000" }
-            }
+            Curve = Curve.Smooth,
+            Width = 2
         }
     };
 
