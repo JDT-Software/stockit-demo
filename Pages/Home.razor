@@ -240,31 +240,13 @@
                                     <MudTh>Action</MudTh>
                                 </HeaderContent>
                                 <RowTemplate>
-                                    <MudTd DataLabel="Code">@context.ProductCode</MudTd>
-                                    <MudTd DataLabel="Name">@context.ProductName</MudTd>
-                                    <MudTd DataLabel="Current Stock" Style="text-align: center;">
-                                        @if (context.StockLevel != null)
-                                        {
-                                            var currentQty = context.StockLevel.CurrentQuantity;
-                                            var bgColor = currentQty == 0 ? "#dc3545" : "#ffc107";
-                                            
-                                            <span style="background-color: @bgColor; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; display: inline-block; min-width: 40px;">
-                                                @currentQty
-                                            </span>
-                                        }
-                                        else
-                                        {
-                                            <span style="background-color: #dc3545; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; display: inline-block; min-width: 40px;">
-                                                0
-                                            </span>
-                                        }
-                                    </MudTd>
-                                    <MudTd DataLabel="Reorder">@context.ReorderPoint</MudTd>
-                                    <MudTd DataLabel="Gap">
-                                        <MudChip T="string" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Error">
-                                            -@(context.ReorderPoint - (context.StockLevel?.CurrentQuantity ?? 0))
-                                        </MudChip>
-                                    </MudTd>
+                                    <MudTd DataLabel="Code">@(context?.ProductCode ?? "N/A")</MudTd>
+                                    <MudTd DataLabel="Name">@(context?.ProductName ?? "N/A")</MudTd>
+                                    @if (context?.StockLevel != null)
+                                    {
+                                        <MudTd DataLabel="Reorder">@(context.ReorderPoint)</MudTd>
+                                        <MudTd DataLabel="Gap">-@((context.ReorderPoint - (context.StockLevel?.CurrentQuantity ?? 0)))</MudTd>
+                                    }
                                     <MudTd>
                                         <MudButton Variant="Variant.Filled"
                                                    Color="MudBlazor.Color.Primary"

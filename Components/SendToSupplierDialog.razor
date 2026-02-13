@@ -62,7 +62,7 @@
 
 @code {
     [CascadingParameter] 
-    private MudBlazor.IDialogService DialogService { get; set; } = null!;
+    private MudBlazor.IDialogReference MudDialog { get; set; } = null!;
 
     [Parameter] 
     public PurchaseOrder PurchaseOrder { get; set; } = null!;
@@ -74,7 +74,7 @@
 
     private void Cancel()
     {
-        DialogService?.Close(DialogResult.Cancel());
+        MudDialog?.Close(DialogResult.Cancel());
     }
     
     private async Task Confirm()
