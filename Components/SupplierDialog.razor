@@ -52,6 +52,7 @@
         </MudForm>
     </DialogContent>
     <DialogActions>
+        <MudButton OnClick="Cancel">Close</MudButton>
         <MudButton Color="Color.Primary" 
                    Variant="Variant.Filled"
                    OnClick="Submit"
@@ -115,5 +116,10 @@
         {
             Snackbar.Add("Failed to save supplier", Severity.Error);
         }
+    }
+
+    private void Cancel()
+    {
+        MudDialog?.Close(DialogResult.Cancel());
     }
 }
